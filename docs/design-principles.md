@@ -38,6 +38,20 @@ If session resume is added, the schema must grow to capture:
 
 Until these fields exist, resume remains explicitly unsupported, and features that *assume* resume (multi-day channels, cross-session pins, persistent handoffs) should not land.
 
+### 3a. Tool / result summaries require a redaction policy, not an afterthought
+
+The `tool / result summaries` field above is the most dangerous item on that list. MCP tool arguments routinely carry tokens, API keys, cookies, auth headers, and local file paths. The transcript is persistent JSONL (see `src/store.ts` and the `/history` command in `agent-room host`), it is replayed over SSE, and it can be pulled into `catch_up` buffers — once sensitive content enters it, it is reachable in multiple places and effectively unrecoverable.
+
+For that reason, the PR that adds tool/result summaries to the schema must land together with its redaction policy. Specifically:
+
+- **Allowlist, not truncation** — define which fields of a tool call/result are summarizable. Mechanical truncation ("first 200 chars") leaks headers and secrets verbatim.
+- **Type-based drops** — arguments typed as credential-like (`token`, `apiKey`, `authorization`, `cookie`, `password`, file paths outside the room's working dir) are dropped, not truncated.
+- **Pattern matching on values** — regardless of field name, values matching known secret patterns (bearer tokens, JWTs, PEM blocks, high-entropy base64) are dropped.
+- **Opt-in per tool** — a tool's summary format is registered explicitly; unknown tools summarize to `"<tool_name> called"` only.
+- **No "log first, redact later"** — the redaction runs before the summary touches the transcript, not after.
+
+This mirrors the mention-first principle: both are "default conservative, require explicit justification to widen." Retrofitting redaction onto an already-persisted transcript is strictly harder than gating writes from day one.
+
 ## 4. When in doubt, keep the relay thin
 
 The room server is a transport and a transcript. It is not a chat UI, not an orchestration layer, not an agent framework.
