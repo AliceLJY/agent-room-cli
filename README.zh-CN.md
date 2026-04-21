@@ -140,7 +140,31 @@ agent-room trio --room dev --name Alice --fresh \
 
 - `/who` 列出参与者
 - `/history` 打印最近 transcript
-- `/exit` 停止 host
+- `/archive` 把当前房间写成 markdown 档案
+- `/where` 打印 transcript JSONL 路径和 archive 目录
+- `/stats` 打印参与者数、消息数和存储路径
+- `/exit` 自动归档当前 transcript 并停止 host
+
+## 按地址引用的延续方式
+
+archive 是在新房间里延续旧讨论的推荐方式。你 `/exit` 时 host 会在 transcript 旁边写一份 markdown archive，之后可以随时查看：
+
+```bash
+agent-room list
+agent-room list --room dev
+```
+
+想在新房间里延续旧话题，开一个全新的房间，然后把 archive 路径贴进首次 mention：
+
+```text
+you> @cc @codex 接上次 ~/.agent-room/archives/dev/2026-04-21-180000.md 的讨论，下一个问题是……
+```
+
+agent 会自己去读那份 markdown。relay 不会主动把 archive 塞进新会话——只有你显式引用的内容才进入 agent 上下文。这样新窗口启动时 context 很小（对 Codex 特别友好），同时你也可以把多份 archive 组合进同一次新讨论，不需要动 transcript schema。
+
+archive 路径：`<data-dir>/archives/<room>/<yyyy-mm-dd-HHMMSS>.md`。每份都带 frontmatter（房间名、计数、参与者列表、时间范围）和一段完整可读的对话正文。
+
+这是刻意的"pull by reference"设计。relay 不自动推送 archive 到新 session 的原因见 [docs/design-principles.md](docs/design-principles.md)（英文）。
 
 ## 设计约束
 

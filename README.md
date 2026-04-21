@@ -140,7 +140,31 @@ Inside `agent-room host`:
 
 - `/who` lists participants
 - `/history` prints recent transcript
-- `/exit` stops the host
+- `/archive` writes a markdown archive of the room right now
+- `/where` prints the transcript JSONL path and the archive directory
+- `/stats` prints participant and message counts plus storage paths
+- `/exit` archives the current transcript automatically and stops the host
+
+## Pull-by-Reference Continuity
+
+Archives are the intended way to continue a prior discussion in a fresh room. When you exit a room, the host writes a markdown archive next to the JSONL transcript. Browse them later:
+
+```bash
+agent-room list
+agent-room list --room dev
+```
+
+To resume a topic in a new room, start fresh and paste the archive path into your first mention:
+
+```text
+you> @cc @codex carrying on from ~/.agent-room/archives/dev/2026-04-21-180000.md — next question is...
+```
+
+The agents read the markdown on demand. The relay never force-injects the archive; only what you explicitly reference enters the agent's context. This keeps startup context small (important for Codex) and lets you combine multiple archives into one new discussion without changing the transcript schema.
+
+Archive layout: `<data-dir>/archives/<room>/<yyyy-mm-dd-HHMMSS>.md`. Each archive has a frontmatter block (room, counts, participant list, time range) and then the full transcript as readable sections.
+
+This is "pull by reference" on purpose. See [docs/design-principles.md](docs/design-principles.md) for why the relay does not push archives into new sessions automatically.
 
 ## Design Notes
 

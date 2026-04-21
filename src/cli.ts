@@ -10,6 +10,12 @@ import { JsonlRoomStore } from "./store.js";
 import { RoomHub, startRoomServer } from "./room-server.js";
 import { runAgent } from "./launcher.js";
 import { runTrio } from "./trio.js";
+import {
+  collectRoomStats,
+  listArchives,
+  resolveArchivePath,
+  writeArchive,
+} from "./archive.js";
 import type { EngagementMode } from "./types.js";
 
 const program = new Command();
@@ -52,7 +58,8 @@ program.command("host")
     console.log(`  agent-room run claude --name cc --server ${server.url} --room ${room}`);
     console.log(`  agent-room run codex --name codex --server ${server.url} --room ${room}`);
     console.log("");
-    console.log("Type messages. Use @cc, @codex, or @all. Commands: /who, /history, /exit");
+    console.log("Type messages. Use @cc, @codex, or @all.");
+    console.log("Commands: /who, /history, /archive, /where, /stats, /exit");
 
     const abort = new AbortController();
     let closed = false;
@@ -68,10 +75,25 @@ program.command("host")
       }
     });
 
+    const autosave = async (): Promise<string | null> => {
+      try {
+        const snapshot = await hub.snapshot(room);
+        if (snapshot.messages.length === 0) return null;
+        const loc = resolveArchivePath(String(opts.dataDir), room);
+        await writeArchive(loc, snapshot);
+        return loc.file;
+      } catch (error) {
+        console.error(`archive failed: ${error instanceof Error ? error.message : String(error)}`);
+        return null;
+      }
+    };
+
     if (!input.isTTY) {
       console.log("stdin is not interactive; server will run until SIGINT or SIGTERM.");
       await waitForSignal();
       closed = true;
+      const saved = await autosave();
+      if (saved) console.log(`archived: ${saved}`);
       abort.abort();
       await streamTask;
       await server.close();
@@ -89,6 +111,8 @@ program.command("host")
         }
         if (text === "/exit" || text === "/quit") {
           shouldPrompt = false;
+          const saved = await autosave();
+          if (saved) console.log(`archived: ${saved}`);
           rl.close();
           return;
         }
@@ -105,6 +129,28 @@ program.command("host")
           for (const message of messages) {
             console.log(`${message.senderName}> ${message.content}`);
           }
+          rl.prompt();
+          return;
+        }
+        if (text === "/archive") {
+          const saved = await autosave();
+          console.log(saved ? `archived: ${saved}` : "nothing to archive (no messages yet)");
+          rl.prompt();
+          return;
+        }
+        if (text === "/where") {
+          const stats = await collectRoomStats(String(opts.dataDir), await hub.snapshot(room));
+          console.log(`transcript: ${stats.transcriptFile}`);
+          console.log(`archives:   ${stats.archiveDir}`);
+          if (stats.latestArchive) console.log(`latest:     ${stats.latestArchive}`);
+          rl.prompt();
+          return;
+        }
+        if (text === "/stats") {
+          const stats = await collectRoomStats(String(opts.dataDir), await hub.snapshot(room));
+          console.log(`room=${stats.room} participants=${stats.participantCount} messages=${stats.messageCount}`);
+          console.log(`transcript: ${stats.transcriptFile}`);
+          console.log(`archives:   ${stats.archiveDir}`);
           rl.prompt();
           return;
         }
@@ -220,6 +266,25 @@ program.command("send")
       content: parts.join(" "),
     });
     console.log(`sent ${message.id}`);
+  });
+
+program.command("list")
+  .description("List archived room transcripts")
+  .option("--data-dir <path>", "JSONL store directory", join(homedir(), ".agent-room"))
+  .option("--room <name>", "filter by room")
+  .action(async (opts) => {
+    const entries = await listArchives(String(opts.dataDir));
+    const filtered = opts.room ? entries.filter((e) => e.room === slugifyName(String(opts.room)) || e.room === String(opts.room)) : entries;
+    if (filtered.length === 0) {
+      console.log("(no archives)");
+      return;
+    }
+    for (const entry of filtered) {
+      const when = entry.createdAt || "?";
+      const kb = Math.max(1, Math.round(entry.sizeBytes / 1024));
+      console.log(`${when}  room=${entry.room}  messages=${entry.messageCount}  ${kb}KB`);
+      console.log(`  ${entry.file}`);
+    }
   });
 
 await program.parseAsync(process.argv);

@@ -52,7 +52,21 @@ For that reason, the PR that adds tool/result summaries to the schema must land 
 
 This mirrors the mention-first principle: both are "default conservative, require explicit justification to widen." Retrofitting redaction onto an already-persisted transcript is strictly harder than gating writes from day one.
 
-## 4. When in doubt, keep the relay thin
+## 4. Continuity across rooms is pull-by-reference, not push-by-default
+
+When you need a new room to benefit from a prior discussion, the flow is: archive the prior room to markdown, start a fresh room, and reference the archive path explicitly in your first mention. The agent reads the archive on demand through its own file-reading tools. The relay does not force-inject prior archives into new sessions.
+
+This is a deliberate choice and not a limitation to be "fixed" with auto-resume. The push model (relay loads N prior messages at agent startup) has three problems that pull-by-reference avoids:
+
+- **Every startup pays for the discussion**, even when the user did not need to continue it. This is especially hostile to Codex, whose context window is smaller than Claude Code's.
+- **The relay has to decide what is relevant.** It cannot, without re-implementing the summarization and causal-replay problems that section 3 defers.
+- **Cross-discussion composition is unnatural.** Combining references to two or three prior archives in one new mention (`"carrying on from A.md and B.md..."`) is trivial with pull-by-reference and awkward with push.
+
+Operationally: `/exit` in `agent-room host` autosaves a markdown archive; `agent-room list` indexes them; the archive format is a frontmatter block plus the transcript in human-readable sections. The archive is the user's artifact — they can edit it, annotate it, delete it, or merge archives by hand before referencing.
+
+The redaction rules in section 3a still apply to archives the moment tool/result summaries enter `RoomMessage`. An archive that includes unredacted tool calls is as dangerous as a transcript that does. Archive generation must route through the same redaction path.
+
+## 5. When in doubt, keep the relay thin
 
 The room server is a transport and a transcript. It is not a chat UI, not an orchestration layer, not an agent framework.
 
