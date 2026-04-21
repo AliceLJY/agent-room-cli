@@ -148,12 +148,17 @@ async function readEntry(file: string, room: string, sizeBytes: number): Promise
   const front = parseFrontmatter(raw);
   return {
     file,
-    room,
+    room: front.room || room,
     createdAt: front.archived_at ?? "",
     messageCount: Number(front.message_count ?? 0),
     participantCount: Number(front.participant_count ?? 0),
     sizeBytes,
   };
+}
+
+export function matchRoomFilter(entry: ArchiveEntry, filter: string): boolean {
+  if (entry.room === filter) return true;
+  return safeName(entry.room) === safeName(filter);
 }
 
 function parseFrontmatter(raw: string): Record<string, string> {

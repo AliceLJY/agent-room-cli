@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import {
   listArchives,
+  matchRoomFilter,
   renderArchiveMarkdown,
   resolveArchivePath,
   writeArchive,
@@ -134,6 +135,30 @@ describe("listArchives + writeArchive round-trip", () => {
 
     const raw = await readFile(loc.file, "utf8");
     expect(raw).toContain("first");
+  });
+
+  it("preserves the raw room name in list entries and matches either normalized form", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "agent-room-archive-spaces-"));
+    try {
+      const now = new Date("2026-04-21T13:00:00.000Z");
+      const spacey: RoomSnapshot = {
+        room: "my room",
+        participants: [alice],
+        messages: [message({ content: "hi", createdAt: now.toISOString() })],
+      };
+      const loc = resolveArchivePath(dir, "my room", now);
+      await writeArchive(loc, spacey, now);
+
+      const entries = await listArchives(dir);
+      expect(entries).toHaveLength(1);
+      expect(entries[0].room).toBe("my room");
+
+      expect(matchRoomFilter(entries[0], "my room")).toBe(true);
+      expect(matchRoomFilter(entries[0], "my_room")).toBe(true);
+      expect(matchRoomFilter(entries[0], "other")).toBe(false);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it("retries with a suffix when the target path already exists", async () => {

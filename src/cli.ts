@@ -13,6 +13,7 @@ import { runTrio } from "./trio.js";
 import {
   collectRoomStats,
   listArchives,
+  matchRoomFilter,
   resolveArchivePath,
   writeArchive,
 } from "./archive.js";
@@ -291,7 +292,7 @@ program.command("list")
   .option("--room <name>", "filter by room")
   .action(async (opts) => {
     const entries = await listArchives(String(opts.dataDir));
-    const filtered = opts.room ? entries.filter((e) => e.room === slugifyName(String(opts.room)) || e.room === String(opts.room)) : entries;
+    const filtered = opts.room ? entries.filter((e) => matchRoomFilter(e, String(opts.room))) : entries;
     if (filtered.length === 0) {
       console.log("(no archives)");
       return;
