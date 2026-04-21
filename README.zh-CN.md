@@ -71,6 +71,8 @@ you> @all settle on the final version
 
 默认已开启鼠标切 pane。Codex 要登录时，可以直接点右下角 Codex 窗格处理；也可以按 `Ctrl-b` 再按方向键切换，或者 `Ctrl-b q` 显示 pane 编号后按数字。
 
+Codex 会复用你正常的 `~/.codex` 登录态。`agent-room` 只会通过临时 CLI 参数传入房间 MCP 配置，所以重开房间不应该要求重新登录 Codex。
+
 如果只想创建 tmux 房间、稍后自己 attach：
 
 ```bash

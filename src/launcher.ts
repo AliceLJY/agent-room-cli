@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -108,10 +108,9 @@ export async function startAgentInTarget(
       ...quoteArgs(options.extraArgs),
     ].join(" "));
   } else {
-    const codexHome = writeCodexHome(tmpDir, mcpArgs);
     tmuxSendCommand(options.target, [
-      `CODEX_HOME=${shellQuote(codexHome)}`,
       "codex",
+      ...quoteArgs(codexMcpConfigArgs(mcpArgs)),
       ...quoteArgs(options.extraArgs),
     ].join(" "));
   }
@@ -177,20 +176,20 @@ function writeClaudeMcpConfig(tmpDir: string, args: string[]): string {
   return configPath;
 }
 
-function writeCodexHome(tmpDir: string, args: string[]): string {
-  const codexHome = join(tmpDir, ".codex");
-  mkdirSync(codexHome, { recursive: true });
+function codexMcpConfigArgs(args: string[]): string[] {
   const quotedArgs = args.map((arg) => JSON.stringify(arg)).join(", ");
-  writeFileSync(join(codexHome, "config.toml"), [
-    "[mcp_servers.agent_room]",
-    'type = "stdio"',
-    `command = ${JSON.stringify(process.execPath)}`,
-    `args = [${quotedArgs}]`,
-    "startup_timeout_sec = 15",
-    "tool_timeout_sec = 60",
-    "",
-  ].join("\n"));
-  return codexHome;
+  return [
+    "-c",
+    'mcp_servers.agent_room.type="stdio"',
+    "-c",
+    `mcp_servers.agent_room.command=${JSON.stringify(process.execPath)}`,
+    "-c",
+    `mcp_servers.agent_room.args=[${quotedArgs}]`,
+    "-c",
+    "mcp_servers.agent_room.startup_timeout_sec=15",
+    "-c",
+    "mcp_servers.agent_room.tool_timeout_sec=60",
+  ];
 }
 
 function ensureCliAvailable(client: "claude" | "codex"): void {
