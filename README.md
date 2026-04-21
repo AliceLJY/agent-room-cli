@@ -140,31 +140,25 @@ Inside `agent-room host`:
 
 - `/who` lists participants
 - `/history` prints recent transcript
-- `/archive` writes a markdown archive of the room right now
-- `/where` prints the transcript JSONL path and the archive directory
-- `/stats` prints participant and message counts plus storage paths
 - `/exit` archives the current transcript automatically and stops the host
 
-## Pull-by-Reference Continuity
+## Finding Past Discussions
 
-Archives are the intended way to continue a prior discussion in a fresh room. When you exit a room, the host writes a markdown archive next to the JSONL transcript. Browse them later:
+When you `/exit`, the host writes a markdown archive of the whole room at `~/.agent-room/archives/<room>/<yyyy-mm-dd-HHMMSS>.md`. To browse past rooms later:
 
 ```bash
 agent-room list
-agent-room list --room dev
 ```
 
-To resume a topic in a new room, start fresh and paste the archive path into your first mention:
+Each entry prints a timestamp, the room name, message count, size, and the full archive path. Open the `.md` file with any markdown reader (or `cat`, `less`, your editor).
+
+To continue a past discussion in a fresh room, paste the archive path into your first mention:
 
 ```text
-you> @cc @codex carrying on from ~/.agent-room/archives/dev/2026-04-21-180000.md — next question is...
+you> @cc @codex carrying on from ~/.agent-room/archives/dev/2026-04-22-012638.md — next question is...
 ```
 
-The agents read the markdown on demand. The relay never force-injects the archive; only what you explicitly reference enters the agent's context. This keeps startup context small (important for Codex) and lets you combine multiple archives into one new discussion without changing the transcript schema.
-
-Archive layout: `<data-dir>/archives/<room>/<yyyy-mm-dd-HHMMSS>.md`. Each archive has a frontmatter block (room, counts, participant list, time range) and then the full transcript as readable sections.
-
-This is "pull by reference" on purpose. See [docs/design-principles.md](docs/design-principles.md) for why the relay does not push archives into new sessions automatically.
+The agents read the archive on demand. The relay never force-injects past context — only what you explicitly reference enters an agent's context. See [docs/design-principles.md](docs/design-principles.md) for why this is intentional.
 
 ## Design Notes
 

@@ -11,7 +11,6 @@ import { RoomHub, startRoomServer } from "./room-server.js";
 import { runAgent } from "./launcher.js";
 import { runTrio } from "./trio.js";
 import {
-  collectRoomStats,
   listArchives,
   matchRoomFilter,
   resolveArchivePath,
@@ -60,7 +59,8 @@ program.command("host")
     console.log(`  agent-room run codex --name codex --server ${server.url} --room ${room}`);
     console.log("");
     console.log("Type messages. Use @cc, @codex, or @all.");
-    console.log("Commands: /who, /history, /archive, /where, /stats, /exit");
+    console.log("Commands: /who, /history, /exit");
+    console.log("Archives on /exit. Browse past rooms with: agent-room list");
 
     const abort = new AbortController();
     let closed = false;
@@ -129,28 +129,6 @@ program.command("host")
           for (const message of messages) {
             console.log(`${message.senderName}> ${message.content}`);
           }
-          rl.prompt();
-          return;
-        }
-        if (text === "/archive") {
-          const saved = await autosave();
-          console.log(saved ? `archived: ${saved}` : "nothing to archive (no messages yet)");
-          rl.prompt();
-          return;
-        }
-        if (text === "/where") {
-          const stats = await collectRoomStats(String(opts.dataDir), await hub.snapshot(room));
-          console.log(`transcript: ${stats.transcriptFile}`);
-          console.log(`archives:   ${stats.archiveDir}`);
-          if (stats.latestArchive) console.log(`latest:     ${stats.latestArchive}`);
-          rl.prompt();
-          return;
-        }
-        if (text === "/stats") {
-          const stats = await collectRoomStats(String(opts.dataDir), await hub.snapshot(room));
-          console.log(`room=${stats.room} participants=${stats.participantCount} messages=${stats.messageCount}`);
-          console.log(`transcript: ${stats.transcriptFile}`);
-          console.log(`archives:   ${stats.archiveDir}`);
           rl.prompt();
           return;
         }

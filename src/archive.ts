@@ -1,7 +1,7 @@
 import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { dirname, extname, join } from "node:path";
-import type { Participant, RoomMessage, RoomSnapshot } from "./types.js";
+import type { RoomMessage, RoomSnapshot } from "./types.js";
 
 export interface ArchiveLocation {
   dataDir: string;
@@ -175,34 +175,6 @@ function parseFrontmatter(raw: string): Record<string, string> {
   return out;
 }
 
-export interface RoomStats {
-  room: string;
-  participantCount: number;
-  messageCount: number;
-  transcriptFile: string;
-  archiveDir: string;
-  latestArchive?: string;
-}
-
-export async function collectRoomStats(
-  dataDir: string,
-  snapshot: RoomSnapshot,
-): Promise<RoomStats> {
-  const safeRoom = safeName(snapshot.room);
-  const transcriptFile = join(dataDir, `${safeRoom}.jsonl`);
-  const aDir = archiveDir(dataDir, snapshot.room);
-  const archives = await listArchives(dataDir);
-  const latest = archives.find((entry) => entry.room === safeRoom);
-  return {
-    room: snapshot.room,
-    participantCount: snapshot.participants.length,
-    messageCount: snapshot.messages.length,
-    transcriptFile,
-    archiveDir: aDir,
-    latestArchive: latest?.file,
-  };
-}
-
 function timestampSlug(now: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return [
@@ -218,8 +190,4 @@ function timestampSlug(now: Date): string {
 
 function safeName(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]+/g, "_") || "main";
-}
-
-export function formatParticipants(participants: Participant[]): string {
-  return participants.map((p) => `@${p.identifier}`).join(", ");
 }
