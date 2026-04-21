@@ -121,7 +121,8 @@ describe("listArchives + writeArchive round-trip", () => {
     const dir = await root;
     const now = new Date("2026-04-21T11:00:00.000Z");
     const loc = resolveArchivePath(dir, "dev", now);
-    await writeArchive(loc, snapshotFixture([message({ content: "first" })]), now);
+    const written = await writeArchive(loc, snapshotFixture([message({ content: "first" })]), now);
+    expect(written).toBe(loc.file);
 
     const entries = await listArchives(dir);
     expect(entries).toHaveLength(1);
@@ -133,5 +134,26 @@ describe("listArchives + writeArchive round-trip", () => {
 
     const raw = await readFile(loc.file, "utf8");
     expect(raw).toContain("first");
+  });
+
+  it("retries with a suffix when the target path already exists", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "agent-room-archive-collide-"));
+    try {
+      const now = new Date("2026-04-21T12:00:00.000Z");
+      const loc = resolveArchivePath(dir, "dev", now);
+      const firstPath = await writeArchive(loc, snapshotFixture([message({ content: "alpha-payload" })]), now);
+      const secondPath = await writeArchive(loc, snapshotFixture([message({ content: "beta-payload" })]), now);
+      expect(firstPath).toBe(loc.file);
+      expect(secondPath).not.toBe(firstPath);
+      expect(secondPath.endsWith(".md")).toBe(true);
+      const aRaw = await readFile(firstPath, "utf8");
+      const bRaw = await readFile(secondPath, "utf8");
+      expect(aRaw).toContain("alpha-payload");
+      expect(bRaw).toContain("beta-payload");
+      expect(aRaw).not.toContain("beta-payload");
+      expect(bRaw).not.toContain("alpha-payload");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

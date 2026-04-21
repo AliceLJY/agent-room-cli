@@ -80,8 +80,7 @@ program.command("host")
         const snapshot = await hub.snapshot(room);
         if (snapshot.messages.length === 0) return null;
         const loc = resolveArchivePath(String(opts.dataDir), room);
-        await writeArchive(loc, snapshot);
-        return loc.file;
+        return await writeArchive(loc, snapshot);
       } catch (error) {
         console.error(`archive failed: ${error instanceof Error ? error.message : String(error)}`);
         return null;
@@ -168,8 +167,26 @@ program.command("host")
       }
     });
 
+    let signalShutdown: Promise<void> | null = null;
+    const onSignal = (signal: NodeJS.Signals) => {
+      if (signalShutdown) return;
+      signalShutdown = (async () => {
+        output.write(`\nreceived ${signal}, archiving before exit...\n`);
+        const saved = await autosave();
+        if (saved) output.write(`archived: ${saved}\n`);
+        rl.close();
+      })();
+    };
+    process.once("SIGINT", onSignal);
+    process.once("SIGTERM", onSignal);
+    process.once("SIGHUP", onSignal);
+
     await new Promise<void>((resolve) => rl.on("close", resolve));
     closed = true;
+    if (signalShutdown) await signalShutdown;
+    process.off("SIGINT", onSignal);
+    process.off("SIGTERM", onSignal);
+    process.off("SIGHUP", onSignal);
     abort.abort();
     await streamTask;
     await server.close();

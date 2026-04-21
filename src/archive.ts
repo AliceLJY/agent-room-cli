@@ -1,5 +1,6 @@
 import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { randomBytes } from "node:crypto";
+import { dirname, extname, join } from "node:path";
 import type { Participant, RoomMessage, RoomSnapshot } from "./types.js";
 
 export interface ArchiveLocation {
@@ -27,10 +28,27 @@ export function resolveArchivePath(dataDir: string, room: string, now: Date = ne
   return { dataDir, room, file: join(dir, `${stamp}.md`) };
 }
 
-export async function writeArchive(location: ArchiveLocation, snapshot: RoomSnapshot, now: Date = new Date()): Promise<void> {
+export async function writeArchive(location: ArchiveLocation, snapshot: RoomSnapshot, now: Date = new Date()): Promise<string> {
   await mkdir(dirname(location.file), { recursive: true });
   const body = renderArchiveMarkdown(snapshot, now);
-  await writeFile(location.file, body, "utf8");
+  const ext = extname(location.file) || ".md";
+  const base = location.file.slice(0, location.file.length - ext.length);
+  let target = location.file;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try {
+      await writeFile(target, body, { encoding: "utf8", flag: "wx" });
+      return target;
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      if (err.code !== "EEXIST") throw error;
+      target = `${base}-${shortId()}${ext}`;
+    }
+  }
+  throw new Error(`archive write failed: collision retries exhausted at ${location.file}`);
+}
+
+function shortId(): string {
+  return randomBytes(3).toString("hex");
 }
 
 export function renderArchiveMarkdown(snapshot: RoomSnapshot, now: Date = new Date()): string {

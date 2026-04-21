@@ -26,6 +26,8 @@
   },
   "files": [
     "dist",
+    "docs/design-principles.md",
+    "docs/release-checklist.md",
     "README.md",
     "README.zh-CN.md",
     "LICENSE"
