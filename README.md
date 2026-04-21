@@ -120,6 +120,13 @@ agent-room run codex --name codex --server http://127.0.0.1:43110 --room dev
 agent-room send --server http://127.0.0.1:43110 --room dev "@cc hello"
 ```
 
+Pass native Claude Code or Codex flags after `--`:
+
+```bash
+agent-room run claude --name cc --server http://127.0.0.1:43110 --room dev -- --dangerously-skip-permissions
+agent-room run codex --name codex --server http://127.0.0.1:43110 --room dev -- --ask-for-approval never
+```
+
 Inside `agent-room host`:
 
 - `/who` lists participants

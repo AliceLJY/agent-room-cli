@@ -53,7 +53,6 @@ program.command("host")
     console.log("");
     console.log("Type messages. Use @cc, @codex, or @all. Commands: /who, /history, /exit");
 
-    const rl = createInterface({ input, output, prompt: "you> " });
     const abort = new AbortController();
     let closed = false;
     const streamClient = new RoomClient(server.url, room);
@@ -61,13 +60,24 @@ program.command("host")
       if (event.type !== "message") return;
       if (event.message.senderId === participant.id) return;
       output.write(`\n${event.message.senderName}> ${event.message.content}\n`);
-      if (!closed) rl.prompt();
+      if (!closed && input.isTTY) output.write("you> ");
     }, abort.signal).catch((error) => {
       if (!abort.signal.aborted) {
         console.error(`room stream stopped: ${error.message}`);
       }
     });
 
+    if (!input.isTTY) {
+      console.log("stdin is not interactive; server will run until SIGINT or SIGTERM.");
+      await waitForSignal();
+      closed = true;
+      abort.abort();
+      await streamTask;
+      await server.close();
+      return;
+    }
+
+    const rl = createInterface({ input, output, prompt: "you> " });
     rl.prompt();
     rl.on("line", async (line) => {
       const text = line.trim();
@@ -182,4 +192,11 @@ function parseMode(value: string): EngagementMode {
     throw new Error(`invalid mode: ${value}`);
   }
   return value as EngagementMode;
+}
+
+function waitForSignal(): Promise<void> {
+  return new Promise((resolve) => {
+    process.once("SIGINT", resolve);
+    process.once("SIGTERM", resolve);
+  });
 }

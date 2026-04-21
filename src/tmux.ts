@@ -76,6 +76,7 @@ export function tmuxAttach(session: string): Promise<void> {
 export class AgentTmuxBridge {
   private readonly queue: string[] = [];
   private timer: ReturnType<typeof setInterval> | null = null;
+  private injecting = false;
   private stopped = false;
 
   constructor(
@@ -86,12 +87,8 @@ export class AgentTmuxBridge {
   deliver(prompt: string): void {
     const flattened = prompt.replace(/\s+/g, " ").trim();
     if (!flattened) return;
-    if (this.isSafeToInject()) {
-      this.inject(flattened);
-      return;
-    }
     this.queue.push(flattened);
-    this.startPolling();
+    void this.drain();
   }
 
   stop(): void {
@@ -103,18 +100,32 @@ export class AgentTmuxBridge {
 
   private startPolling(): void {
     if (this.timer || this.stopped) return;
-    this.timer = setInterval(() => this.drain(), 250);
+    this.timer = setInterval(() => void this.drain(), 250);
   }
 
-  private drain(): void {
+  private async drain(): Promise<void> {
+    if (this.injecting || this.stopped) return;
     if (this.queue.length === 0) {
-      if (this.timer) clearInterval(this.timer);
-      this.timer = null;
+      this.stopPolling();
       return;
     }
-    if (!this.isSafeToInject()) return;
+    if (!this.isSafeToInject()) {
+      this.startPolling();
+      return;
+    }
     const next = this.queue.shift();
-    if (next) this.inject(next);
+    if (!next) return;
+    this.injecting = true;
+    try {
+      await this.inject(next);
+    } finally {
+      this.injecting = false;
+    }
+    if (this.queue.length > 0) {
+      void this.drain();
+    } else {
+      this.stopPolling();
+    }
   }
 
   private isSafeToInject(): boolean {
@@ -137,19 +148,24 @@ export class AgentTmuxBridge {
     ].some((needle) => tail.includes(needle)) && !/Working\s*(\(|$)/.test(tail) && !containsSpinner(tail);
   }
 
-  private inject(text: string): void {
+  private async inject(text: string): Promise<void> {
     if (this.client === "codex") {
       tmuxInjectText(this.session, "\x1b[200~");
       tmuxInjectText(this.session, text);
       tmuxInjectText(this.session, "\x1b[201~");
-      sleep(150);
+      await delay(150);
       tmuxSendEnter(this.session);
       return;
     }
     tmuxInjectText(this.session, text);
     tmuxSendEnter(this.session);
-    sleep(80);
+    await delay(80);
     tmuxSendEnter(this.session);
+  }
+
+  private stopPolling(): void {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
   }
 }
 
@@ -161,7 +177,7 @@ function safeSession(session: string): string {
   return session.replace(/[^a-zA-Z0-9_.:-]/g, "_");
 }
 
-function sleep(ms: number): void {
-  if (ms <= 0) return;
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+function delay(ms: number): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
