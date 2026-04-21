@@ -56,6 +56,7 @@ export async function runTrio(options: TrioOptions): Promise<void> {
   const hostPane = tmuxCreateSessionWithCommand(session, hostCommand(options));
   tmuxRenamePane(hostPane, `you: ${options.name}`);
   tmuxSetOption(session, "status", "off");
+  tmuxSetOption(session, "mouse", "on");
   tmuxSetOption(session, "pane-border-status", "top");
   tmuxSetOption(session, "pane-border-format", " #{pane_title} ");
 
@@ -92,6 +93,7 @@ export async function runTrio(options: TrioOptions): Promise<void> {
     console.log(`agent-room trio is ready: ${serverUrl}`);
     console.log(`tmux session: ${session}`);
     console.log("Use @cc, @codex, or @all from the left pane.");
+    console.log("Switch panes with mouse click, Ctrl-b + arrow keys, or Ctrl-b q then pane number.");
 
     if (options.attach) {
       await tmuxAttach(session);

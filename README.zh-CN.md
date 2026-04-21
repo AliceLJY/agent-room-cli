@@ -69,6 +69,8 @@ you> @codex challenge cc's conclusion
 you> @all settle on the final version
 ```
 
+默认已开启鼠标切 pane。Codex 要登录时，可以直接点右下角 Codex 窗格处理；也可以按 `Ctrl-b` 再按方向键切换，或者 `Ctrl-b q` 显示 pane 编号后按数字。
+
 如果只想创建 tmux 房间、稍后自己 attach：
 
 ```bash

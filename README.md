@@ -69,6 +69,8 @@ you> @codex challenge cc's conclusion
 you> @all settle on the final version
 ```
 
+Mouse pane switching is enabled. You can click the Codex pane to finish login, or use `Ctrl-b` then an arrow key. `Ctrl-b q` shows pane numbers.
+
 To create the tmux room without attaching immediately:
 
 ```bash
