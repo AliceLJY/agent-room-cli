@@ -86,7 +86,7 @@ Default mode is `mentioned`.
 
 | Mode | Behavior |
 |---|---|
-| `mentioned` | Trigger only on `@agent` or `@all`; buffer other messages as context |
+| `mentioned` | Trigger only on human `@agent` or `@all`; buffer agent messages as context |
 | `people` | Trigger on human messages; buffer agent messages |
 | `agents` | Trigger on agent messages; buffer human messages |
 | `everyone` | Trigger on every non-self message |

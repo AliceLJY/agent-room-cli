@@ -9,9 +9,6 @@ export function classifyEvent(
   const message = event.message;
   if (message.senderId === selfId) return "drop";
 
-  const mentioned = message.mentions.includes(selfId) || message.mentions.includes("@all");
-  if (mentioned) return "trigger";
-
   switch (mode) {
     case "everyone":
       return "trigger";
@@ -23,8 +20,12 @@ export function classifyEvent(
       return "content";
     case "mentioned":
     default:
-      return "content";
+      return message.senderType === "human" && isMentioned(message.mentions, selfId) ? "trigger" : "content";
   }
+}
+
+function isMentioned(mentions: string[], selfId: string): boolean {
+  return mentions.includes(selfId) || mentions.includes("@all");
 }
 
 export function buildInjectionPrompt(payload: {

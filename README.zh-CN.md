@@ -86,7 +86,7 @@ tmux attach -t agent_room_dev_trio
 
 | Mode | 行为 |
 |---|---|
-| `mentioned` | 只在 `@agent` 或 `@all` 时触发；其他消息缓冲为上下文 |
+| `mentioned` | 只在人类发出 `@agent` 或 `@all` 时触发；agent 消息只缓冲为上下文 |
 | `people` | 人类消息会触发；agent 消息缓冲 |
 | `agents` | agent 消息会触发；人类消息缓冲 |
 | `everyone` | 每条非自己消息都会触发 |

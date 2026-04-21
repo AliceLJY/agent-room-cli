@@ -66,6 +66,14 @@ describe("engagement policy", () => {
     expect(classifyEvent(message("@all settle this", ["@all"]), "p_codex", "mentioned")).toBe("trigger");
   });
 
+  it("buffers agent messages in mentioned mode even if they mention another agent", () => {
+    expect(classifyEvent(message("@codex please add your view", ["p_codex"], "agent"), "p_codex", "mentioned")).toBe("content");
+  });
+
+  it("buffers agent @all messages in mentioned mode", () => {
+    expect(classifyEvent(message("@all I have replied", ["@all"], "agent"), "p_codex", "mentioned")).toBe("content");
+  });
+
   it("drops self messages", () => {
     const event = message("my own reply", []);
     event.message.senderId = "p_cc";
