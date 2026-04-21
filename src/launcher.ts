@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { RoomClient } from "./client.js";
 import { buildInjectionPrompt, classifyEvent } from "./engagement.js";
 import { stableId } from "./ids.js";
-import type { AgentRuntimeOptions, RoomMessage } from "./types.js";
+import type { AgentRuntimeOptions, EngagementMode, RoomMessage } from "./types.js";
 import {
   AgentTmuxBridge,
   tmuxAttach,
@@ -17,10 +17,64 @@ import {
   tmuxSessionExists,
 } from "./tmux.js";
 
+export interface AgentTargetRuntimeOptions {
+  client: "claude" | "codex";
+  name: string;
+  identifier: string;
+  serverUrl: string;
+  room: string;
+  mode: EngagementMode;
+  target: string;
+  extraArgs: string[];
+}
+
+export interface AgentTargetHandle {
+  participantId: string;
+  stop: () => Promise<void>;
+}
+
 export async function runAgent(options: AgentRuntimeOptions): Promise<void> {
   if (!tmuxAvailable()) {
     throw new Error("tmux is required. Install it first: brew install tmux");
   }
+
+  const tmpDir = mkdtempSync(join(tmpdir(), "agent-room-"));
+  const session = `agent_room_${options.identifier}`;
+  if (tmuxSessionExists(session)) tmuxKillSession(session);
+  tmuxCreateSession(session);
+
+  const handle = await startAgentInTarget({
+    client: options.client,
+    name: options.name,
+    identifier: options.identifier,
+    serverUrl: options.serverUrl,
+    room: options.room,
+    mode: options.mode,
+    target: session,
+    extraArgs: options.extraArgs,
+  }, tmpDir);
+
+  try {
+    console.log(`Joined room ${options.room} as @${options.identifier} (${options.client}).`);
+    console.log(`tmux session: ${session}`);
+    console.log(`mode: ${options.mode}`);
+
+    if (options.attach) {
+      await tmuxAttach(session);
+    } else {
+      console.log(`Attach manually with: tmux attach -t ${session}`);
+      await waitForSignal();
+    }
+  } finally {
+    await handle.stop();
+    if (!options.keep) tmuxKillSession(session);
+  }
+}
+
+export async function startAgentInTarget(
+  options: AgentTargetRuntimeOptions,
+  tmpDir = mkdtempSync(join(tmpdir(), "agent-room-")),
+): Promise<AgentTargetHandle> {
   ensureCliAvailable(options.client);
 
   const client = new RoomClient(options.serverUrl, options.room);
@@ -32,11 +86,6 @@ export async function runAgent(options: AgentRuntimeOptions): Promise<void> {
     client: options.client,
     mode: options.mode,
   });
-
-  const tmpDir = mkdtempSync(join(tmpdir(), "agent-room-"));
-  const session = `agent_room_${options.identifier}`;
-  if (tmuxSessionExists(session)) tmuxKillSession(session);
-  tmuxCreateSession(session);
 
   const mcpArgs = [
     mcpServerPath(),
@@ -52,13 +101,22 @@ export async function runAgent(options: AgentRuntimeOptions): Promise<void> {
 
   if (options.client === "claude") {
     const configPath = writeClaudeMcpConfig(tmpDir, mcpArgs);
-    tmuxSendCommand(session, ["claude", "--mcp-config", shellQuote(configPath), ...options.extraArgs].join(" "));
+    tmuxSendCommand(options.target, [
+      "claude",
+      "--mcp-config",
+      shellQuote(configPath),
+      ...quoteArgs(options.extraArgs),
+    ].join(" "));
   } else {
     const codexHome = writeCodexHome(tmpDir, mcpArgs);
-    tmuxSendCommand(session, [`CODEX_HOME=${shellQuote(codexHome)}`, "codex", ...options.extraArgs].join(" "));
+    tmuxSendCommand(options.target, [
+      `CODEX_HOME=${shellQuote(codexHome)}`,
+      "codex",
+      ...quoteArgs(options.extraArgs),
+    ].join(" "));
   }
 
-  const bridge = new AgentTmuxBridge(session, options.client);
+  const bridge = new AgentTmuxBridge(options.target, options.client);
   const abort = new AbortController();
   const buffered: RoomMessage[] = [];
   const streamTask = client.stream((event) => {
@@ -85,26 +143,19 @@ export async function runAgent(options: AgentRuntimeOptions): Promise<void> {
     }
   });
 
-  console.log(`Joined room ${options.room} as @${options.identifier} (${options.client}).`);
-  console.log(`tmux session: ${session}`);
-  console.log(`mode: ${options.mode}`);
-
-  if (options.attach) {
-    await tmuxAttach(session);
-  } else {
-    console.log(`Attach manually with: tmux attach -t ${session}`);
-    await waitForSignal();
-  }
-
-  abort.abort();
-  bridge.stop();
-  await streamTask;
-  if (!options.keep) tmuxKillSession(session);
-  try {
-    rmSync(tmpDir, { recursive: true, force: true });
-  } catch {
-    // best effort
-  }
+  return {
+    participantId: participant.id,
+    async stop() {
+      abort.abort();
+      bridge.stop();
+      await streamTask;
+      try {
+        rmSync(tmpDir, { recursive: true, force: true });
+      } catch {
+        // best effort
+      }
+    },
+  };
 }
 
 function mcpServerPath(): string {
@@ -156,6 +207,10 @@ function trimBuffer(messages: RoomMessage[]): void {
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+function quoteArgs(args: string[]): string[] {
+  return args.map(shellQuote);
 }
 
 function waitForSignal(): Promise<void> {

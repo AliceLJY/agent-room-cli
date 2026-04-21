@@ -9,6 +9,7 @@ import { slugifyName, stableId } from "./ids.js";
 import { JsonlRoomStore } from "./store.js";
 import { RoomHub, startRoomServer } from "./room-server.js";
 import { runAgent } from "./launcher.js";
+import { runTrio } from "./trio.js";
 import type { EngagementMode } from "./types.js";
 
 const program = new Command();
@@ -157,6 +158,43 @@ program.command("run")
     });
   });
 
+program.command("trio")
+  .description("Start a three-pane tmux room with a human host, Claude Code, and Codex")
+  .option("-r, --room <name>", "room name", "main")
+  .option("-n, --name <name>", "your display name", process.env.USER || "human")
+  .option("-p, --port <port>", "port", "43110")
+  .option("--host <host>", "bind host", "127.0.0.1")
+  .option("--data-dir <path>", "JSONL store directory", join(homedir(), ".agent-room"))
+  .option("--cc-name <name>", "Claude Code display name and mention identifier", "cc")
+  .option("--codex-name <name>", "Codex display name and mention identifier", "codex")
+  .option("--cc-mode <mode>", "Claude Code mode", "mentioned")
+  .option("--codex-mode <mode>", "Codex mode", "mentioned")
+  .option("--cc-arg <arg>", "extra Claude Code arg; repeat with --cc-arg=<value>", collect, [])
+  .option("--codex-arg <arg>", "extra Codex arg; repeat with --codex-arg=<value>", collect, [])
+  .option("--session <name>", "tmux session name")
+  .option("--fresh", "kill an existing trio tmux session before starting")
+  .option("--keep", "keep the tmux session after this process exits")
+  .option("--no-attach", "create the tmux session but do not attach immediately")
+  .action(async (opts) => {
+    await runTrio({
+      room: String(opts.room),
+      name: String(opts.name),
+      host: String(opts.host),
+      port: Number(opts.port),
+      dataDir: String(opts.dataDir),
+      ccName: String(opts.ccName),
+      codexName: String(opts.codexName),
+      ccMode: parseMode(String(opts.ccMode)),
+      codexMode: parseMode(String(opts.codexMode)),
+      ccArgs: opts.ccArg ?? [],
+      codexArgs: opts.codexArg ?? [],
+      session: opts.session ? String(opts.session) : undefined,
+      attach: opts.attach,
+      keep: Boolean(opts.keep),
+      fresh: Boolean(opts.fresh),
+    });
+  });
+
 program.command("send")
   .description("Send one message to an existing room")
   .requiredOption("-s, --server <url>", "room server URL")
@@ -199,4 +237,9 @@ function waitForSignal(): Promise<void> {
     process.once("SIGINT", resolve);
     process.once("SIGTERM", resolve);
   });
+}
+
+function collect(value: string, previous: string[]): string[] {
+  previous.push(value);
+  return previous;
 }

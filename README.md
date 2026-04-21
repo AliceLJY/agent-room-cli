@@ -55,30 +55,25 @@ Prerequisites:
 
 ## Quick Start
 
-Terminal 1:
+One command opens a three-pane tmux room:
 
 ```bash
-agent-room host --room dev --name Alice
+agent-room trio --room dev --name Alice --fresh
 ```
 
-Terminal 2:
-
-```bash
-agent-room run claude --name cc --server http://127.0.0.1:43110 --room dev
-```
-
-Terminal 3:
-
-```bash
-agent-room run codex --name codex --server http://127.0.0.1:43110 --room dev
-```
-
-Back in Terminal 1:
+The left pane is the human room. The right panes run Claude Code and Codex. In the left pane:
 
 ```text
 you> @cc first pass on this design
 you> @codex challenge cc's conclusion
 you> @all settle on the final version
+```
+
+To create the tmux room without attaching immediately:
+
+```bash
+agent-room trio --room dev --name Alice --fresh --no-attach --keep
+tmux attach -t agent_room_dev_trio
 ```
 
 ## Routing Modes
@@ -96,8 +91,7 @@ Default mode is `mentioned`.
 For the three-person room you described, use the default:
 
 ```bash
-agent-room run claude --name cc --server http://127.0.0.1:43110 --room dev
-agent-room run codex --name codex --server http://127.0.0.1:43110 --room dev
+agent-room trio --room dev --name Alice --fresh
 ```
 
 ## How It Works
@@ -116,17 +110,26 @@ The non-mentioned agent still receives context later: its relay buffers messages
 ## Commands
 
 ```bash
+agent-room trio --room dev --name Alice --fresh
 agent-room host --room dev --name Alice
 agent-room run claude --name cc --server http://127.0.0.1:43110 --room dev
 agent-room run codex --name codex --server http://127.0.0.1:43110 --room dev
 agent-room send --server http://127.0.0.1:43110 --room dev "@cc hello"
 ```
 
-Pass native Claude Code or Codex flags after `--`:
+For manual `run` commands, pass native Claude Code or Codex flags after `--`:
 
 ```bash
 agent-room run claude --name cc --server http://127.0.0.1:43110 --room dev -- --dangerously-skip-permissions
 agent-room run codex --name codex --server http://127.0.0.1:43110 --room dev -- --ask-for-approval never
+```
+
+For `trio`, pass repeated agent args with `--cc-arg=<value>` and `--codex-arg=<value>`:
+
+```bash
+agent-room trio --room dev --name Alice --fresh \
+  --cc-arg=--dangerously-skip-permissions \
+  --codex-arg=--ask-for-approval --codex-arg=never
 ```
 
 Inside `agent-room host`:

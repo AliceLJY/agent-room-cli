@@ -55,30 +55,25 @@ npm link
 
 ## 快速开始
 
-Terminal 1:
+一条命令打开一个三窗格 tmux 房间：
 
 ```bash
-agent-room host --room dev --name Alice
+agent-room trio --room dev --name Alice --fresh
 ```
 
-Terminal 2:
-
-```bash
-agent-room run claude --name cc --server http://127.0.0.1:43110 --room dev
-```
-
-Terminal 3:
-
-```bash
-agent-room run codex --name codex --server http://127.0.0.1:43110 --room dev
-```
-
-回到 Terminal 1:
+左边窗格是你的聊天框，右边两个窗格分别跑 Claude Code 和 Codex。你在左边输入：
 
 ```text
 you> @cc first pass on this design
 you> @codex challenge cc's conclusion
 you> @all settle on the final version
+```
+
+如果只想创建 tmux 房间、稍后自己 attach：
+
+```bash
+agent-room trio --room dev --name Alice --fresh --no-attach --keep
+tmux attach -t agent_room_dev_trio
 ```
 
 ## 路由模式
@@ -96,8 +91,7 @@ you> @all settle on the final version
 你想要的三人房默认就用 `mentioned`：
 
 ```bash
-agent-room run claude --name cc --server http://127.0.0.1:43110 --room dev
-agent-room run codex --name codex --server http://127.0.0.1:43110 --room dev
+agent-room trio --room dev --name Alice --fresh
 ```
 
 ## 工作方式
@@ -116,17 +110,26 @@ human CLI
 ## 命令
 
 ```bash
+agent-room trio --room dev --name Alice --fresh
 agent-room host --room dev --name Alice
 agent-room run claude --name cc --server http://127.0.0.1:43110 --room dev
 agent-room run codex --name codex --server http://127.0.0.1:43110 --room dev
 agent-room send --server http://127.0.0.1:43110 --room dev "@cc hello"
 ```
 
-原生 Claude Code 或 Codex 参数放在 `--` 后面透传：
+手动 `run` 时，原生 Claude Code 或 Codex 参数放在 `--` 后面透传：
 
 ```bash
 agent-room run claude --name cc --server http://127.0.0.1:43110 --room dev -- --dangerously-skip-permissions
 agent-room run codex --name codex --server http://127.0.0.1:43110 --room dev -- --ask-for-approval never
+```
+
+用 `trio` 时，通过重复的 `--cc-arg=<value>` 和 `--codex-arg=<value>` 传参数：
+
+```bash
+agent-room trio --room dev --name Alice --fresh \
+  --cc-arg=--dangerously-skip-permissions \
+  --codex-arg=--ask-for-approval --codex-arg=never
 ```
 
 在 `agent-room host` 内部：

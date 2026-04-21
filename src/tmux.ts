@@ -24,6 +24,47 @@ export function tmuxCreateSession(session: string): void {
   execFileSync("tmux", ["set", "-t", name, "status", "off"]);
 }
 
+export function tmuxCreateSessionWithCommand(session: string, command: string): string {
+  const output = execFileSync("tmux", [
+    "new-session",
+    "-d",
+    "-s",
+    safeSession(session),
+    "-P",
+    "-F",
+    "#{pane_id}",
+    command,
+  ], { encoding: "utf8" });
+  return output.trim();
+}
+
+export function tmuxSplitPane(target: string, direction: "horizontal" | "vertical", command?: string): string {
+  const args = [
+    "split-window",
+    direction === "horizontal" ? "-h" : "-v",
+    "-t",
+    safeSession(target),
+    "-P",
+    "-F",
+    "#{pane_id}",
+  ];
+  if (command) args.push(command);
+  const output = execFileSync("tmux", args, { encoding: "utf8" });
+  return output.trim();
+}
+
+export function tmuxRenamePane(target: string, title: string): void {
+  execFileSync("tmux", ["select-pane", "-t", safeSession(target), "-T", title]);
+}
+
+export function tmuxSelectPane(target: string): void {
+  execFileSync("tmux", ["select-pane", "-t", safeSession(target)]);
+}
+
+export function tmuxSetOption(target: string, option: string, value: string): void {
+  execFileSync("tmux", ["set-option", "-t", safeSession(target), option, value]);
+}
+
 export function tmuxKillSession(session: string): void {
   if (!tmuxSessionExists(session)) return;
   execFileSync("tmux", ["kill-session", "-t", safeSession(session)], { stdio: "ignore" });
@@ -174,7 +215,7 @@ function containsSpinner(text: string): boolean {
 }
 
 function safeSession(session: string): string {
-  return session.replace(/[^a-zA-Z0-9_.:-]/g, "_");
+  return session.replace(/[^a-zA-Z0-9_.:%-]/g, "_");
 }
 
 function delay(ms: number): Promise<void> {
