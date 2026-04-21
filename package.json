@@ -1,0 +1,53 @@
+{
+  "name": "agent-room-cli",
+  "version": "0.1.0",
+  "description": "A local CLI room for humans, Claude Code, and Codex with mention-based agent routing.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AliceLJY/agent-room-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AliceLJY/agent-room-cli/issues"
+  },
+  "homepage": "https://github.com/AliceLJY/agent-room-cli#readme",
+  "keywords": [
+    "claude-code",
+    "codex",
+    "cli",
+    "mcp",
+    "tmux",
+    "agent-room"
+  ],
+  "bin": {
+    "agent-room": "dist/cli.js",
+    "agent-room-mcp": "dist/mcp-server.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "prepare": "npm run build",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.0",
+    "commander": "^14.0.2",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.agent-room/
+coverage/
+*.log
+.DS_Store

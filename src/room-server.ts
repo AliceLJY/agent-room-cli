@@ -1,0 +1,310 @@
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { URL } from "node:url";
+import type {
+  EngagementMode,
+  Participant,
+  RegisterParticipantInput,
+  RoomEvent,
+  RoomMessage,
+  RoomSnapshot,
+  SendMessageInput,
+} from "./types.js";
+import { JsonlRoomStore } from "./store.js";
+import { newId, slugifyName, stableId } from "./ids.js";
+
+interface RoomState {
+  participants: Map<string, Participant>;
+  messages: RoomMessage[];
+  events: RoomEvent[];
+  streams: Set<ServerResponse>;
+}
+
+export class RoomHub {
+  private readonly rooms = new Map<string, RoomState>();
+
+  constructor(private readonly store: JsonlRoomStore) {}
+
+  async registerParticipant(room: string, input: RegisterParticipantInput): Promise<Participant> {
+    const state = await this.getRoom(room);
+    const identifier = slugifyName(input.identifier || input.name);
+    const id = input.id || stableId(`${room}:${identifier}`, "p");
+    const now = new Date().toISOString();
+    const existing = state.participants.get(id);
+    const participant: Participant = {
+      id,
+      room,
+      name: input.name,
+      identifier,
+      type: input.type || "human",
+      client: input.client || (input.type === "agent" ? "unknown" : "human"),
+      mode: input.mode || "mentioned",
+      joinedAt: existing?.joinedAt || now,
+      lastSeenAt: now,
+      status: "online",
+    };
+
+    state.participants.set(id, participant);
+    const event: RoomEvent = {
+      id: newId("evt"),
+      room,
+      type: "participant_joined",
+      participant,
+      createdAt: now,
+    };
+    await this.recordEvent(state, event);
+    return participant;
+  }
+
+  async setMode(room: string, participantId: string, mode: EngagementMode): Promise<Participant | null> {
+    const state = await this.getRoom(room);
+    const participant = state.participants.get(participantId);
+    if (!participant) return null;
+    participant.mode = mode;
+    participant.lastSeenAt = new Date().toISOString();
+    return participant;
+  }
+
+  async leave(room: string, participantId: string): Promise<boolean> {
+    const state = await this.getRoom(room);
+    const participant = state.participants.get(participantId);
+    if (!participant) return false;
+    participant.status = "offline";
+    participant.lastSeenAt = new Date().toISOString();
+    state.participants.delete(participantId);
+    const event: RoomEvent = {
+      id: newId("evt"),
+      room,
+      type: "participant_left",
+      participant,
+      createdAt: participant.lastSeenAt,
+    };
+    await this.recordEvent(state, event);
+    return true;
+  }
+
+  async sendMessage(room: string, input: SendMessageInput): Promise<RoomMessage> {
+    const state = await this.getRoom(room);
+    const sender = state.participants.get(input.senderId);
+    const now = new Date().toISOString();
+    if (sender) {
+      sender.lastSeenAt = now;
+    }
+
+    const message: RoomMessage = {
+      id: newId("msg"),
+      room,
+      senderId: input.senderId,
+      senderName: input.senderName || sender?.name || input.senderId,
+      senderType: input.senderType || sender?.type || "human",
+      content: input.content,
+      mentions: detectMentions(input.content, [...state.participants.values()]),
+      createdAt: now,
+    };
+    state.messages.push(message);
+
+    const event: RoomEvent = {
+      id: newId("evt"),
+      room,
+      type: "message",
+      message,
+      createdAt: now,
+    };
+    await this.recordEvent(state, event);
+    return message;
+  }
+
+  async snapshot(room: string): Promise<RoomSnapshot> {
+    const state = await this.getRoom(room);
+    return {
+      room,
+      participants: [...state.participants.values()],
+      messages: state.messages.slice(),
+    };
+  }
+
+  async messages(room: string, limit = 50): Promise<RoomMessage[]> {
+    const state = await this.getRoom(room);
+    return state.messages.slice(-limit);
+  }
+
+  async events(room: string, since?: string): Promise<RoomEvent[]> {
+    const state = await this.getRoom(room);
+    if (!since) return state.events.slice();
+    return state.events.filter((event) => event.id > since || event.createdAt > since);
+  }
+
+  async stream(room: string, res: ServerResponse): Promise<void> {
+    const state = await this.getRoom(room);
+    state.streams.add(res);
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+    });
+    res.write(": connected\n\n");
+    res.on("close", () => {
+      state.streams.delete(res);
+    });
+  }
+
+  private async getRoom(room: string): Promise<RoomState> {
+    const existing = this.rooms.get(room);
+    if (existing) return existing;
+
+    const events = await this.store.load(room);
+    const state: RoomState = {
+      participants: new Map(),
+      messages: [],
+      events: [],
+      streams: new Set(),
+    };
+
+    for (const event of events) {
+      applyEvent(state, event);
+    }
+    state.events = events;
+    this.rooms.set(room, state);
+    return state;
+  }
+
+  private async recordEvent(state: RoomState, event: RoomEvent): Promise<void> {
+    applyEvent(state, event);
+    state.events.push(event);
+    await this.store.append(event);
+    const payload = `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
+    for (const stream of state.streams) {
+      stream.write(payload);
+    }
+  }
+}
+
+export async function startRoomServer(options: {
+  hub: RoomHub;
+  port: number;
+  host?: string;
+}): Promise<{ url: string; close: () => Promise<void> }> {
+  const host = options.host || "127.0.0.1";
+  const server = createServer((req, res) => {
+    handleRequest(options.hub, req, res).catch((error) => {
+      sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(options.port, host, resolve));
+  const address = server.address();
+  const actualPort = typeof address === "object" && address ? address.port : options.port;
+  return {
+    url: `http://${host}:${actualPort}`,
+    close: () => new Promise((resolve) => server.close(() => resolve())),
+  };
+}
+
+async function handleRequest(hub: RoomHub, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!req.url) return sendJson(res, 404, { error: "missing URL" });
+  const url = new URL(req.url, "http://127.0.0.1");
+  const parts = url.pathname.split("/").filter(Boolean);
+
+  if (req.method === "GET" && url.pathname === "/health") {
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (parts[0] !== "rooms" || !parts[1]) {
+    return sendJson(res, 404, { error: "not found" });
+  }
+
+  const room = decodeURIComponent(parts[1]);
+
+  if (req.method === "GET" && parts.length === 2) {
+    return sendJson(res, 200, await hub.snapshot(room));
+  }
+
+  if (req.method === "POST" && parts[2] === "participants" && parts.length === 3) {
+    const body = await readJson<RegisterParticipantInput>(req);
+    return sendJson(res, 200, await hub.registerParticipant(room, body));
+  }
+
+  if (req.method === "PATCH" && parts[2] === "participants" && parts[3] && parts[4] === "mode") {
+    const body = await readJson<{ mode: EngagementMode }>(req);
+    const participant = await hub.setMode(room, parts[3], body.mode);
+    if (!participant) return sendJson(res, 404, { error: "participant not found" });
+    return sendJson(res, 200, participant);
+  }
+
+  if (req.method === "DELETE" && parts[2] === "participants" && parts[3]) {
+    return sendJson(res, 200, { ok: await hub.leave(room, parts[3]) });
+  }
+
+  if (req.method === "POST" && parts[2] === "messages") {
+    const body = await readJson<SendMessageInput>(req);
+    return sendJson(res, 200, await hub.sendMessage(room, body));
+  }
+
+  if (req.method === "GET" && parts[2] === "messages") {
+    const limit = Number(url.searchParams.get("limit") || 50);
+    return sendJson(res, 200, await hub.messages(room, limit));
+  }
+
+  if (req.method === "GET" && parts[2] === "events") {
+    return sendJson(res, 200, await hub.events(room, url.searchParams.get("since") || undefined));
+  }
+
+  if (req.method === "GET" && parts[2] === "stream") {
+    return hub.stream(room, res);
+  }
+
+  return sendJson(res, 404, { error: "not found" });
+}
+
+function applyEvent(state: RoomState, event: RoomEvent): void {
+  if (event.type === "participant_joined") {
+    state.participants.set(event.participant.id, event.participant);
+  }
+  if (event.type === "participant_left") {
+    state.participants.delete(event.participant.id);
+  }
+  if (event.type === "message") {
+    if (!state.messages.some((message) => message.id === event.message.id)) {
+      state.messages.push(event.message);
+    }
+  }
+}
+
+export function detectMentions(content: string, participants: Participant[]): string[] {
+  const mentions = new Set<string>();
+  const pattern = /@([a-zA-Z0-9_-]+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(content)) !== null) {
+    const token = match[1].toLowerCase();
+    if (token === "all") {
+      mentions.add("@all");
+      continue;
+    }
+    for (const participant of participants) {
+      if (
+        participant.identifier.toLowerCase() === token ||
+        participant.name.toLowerCase() === token
+      ) {
+        mentions.add(participant.id);
+      }
+    }
+  }
+  return [...mentions];
+}
+
+async function readJson<T>(req: IncomingMessage): Promise<T> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  if (chunks.length === 0) return {} as T;
+  return JSON.parse(Buffer.concat(chunks).toString("utf8")) as T;
+}
+
+function sendJson(res: ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+  });
+  res.end(JSON.stringify(body));
+}
