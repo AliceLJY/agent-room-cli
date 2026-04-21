@@ -130,7 +130,7 @@ export class RoomHub {
   async events(room: string, since?: string): Promise<RoomEvent[]> {
     const state = await this.getRoom(room);
     if (!since) return state.events.slice();
-    return state.events.filter((event) => event.id > since || event.createdAt > since);
+    return state.events.filter((event) => event.createdAt >= since);
   }
 
   async stream(room: string, res: ServerResponse): Promise<void> {
@@ -143,7 +143,11 @@ export class RoomHub {
       "Access-Control-Allow-Origin": "*",
     });
     res.write(": connected\n\n");
+    const keepAlive = setInterval(() => {
+      res.write(": heartbeat\n\n");
+    }, 15_000);
     res.on("close", () => {
+      clearInterval(keepAlive);
       state.streams.delete(res);
     });
   }
@@ -190,6 +194,10 @@ export async function startRoomServer(options: {
       sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
     });
   });
+  server.timeout = 0;
+  server.requestTimeout = 0;
+  server.keepAliveTimeout = 0;
+  server.headersTimeout = 0;
 
   await new Promise<void>((resolve) => server.listen(options.port, host, resolve));
   const address = server.address();

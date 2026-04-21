@@ -34,7 +34,46 @@ export class RoomClient {
     return this.request<RoomSnapshot>("GET", "");
   }
 
+  async events(since?: string): Promise<RoomEvent[]> {
+    const query = since ? `?since=${encodeURIComponent(since)}` : "";
+    return this.request<RoomEvent[]>("GET", `/events${query}`);
+  }
+
   async stream(onEvent: (event: RoomEvent) => void, signal?: AbortSignal): Promise<void> {
+    let since: string | undefined;
+    let attempts = 0;
+    const seen = new Set<string>();
+
+    const handleEvent = (event: RoomEvent) => {
+      if (seen.has(event.id)) return;
+      seen.add(event.id);
+      if (seen.size > 1000) {
+        const oldest = seen.values().next().value;
+        if (oldest) seen.delete(oldest);
+      }
+      since = event.createdAt;
+      onEvent(event);
+    };
+
+    while (!signal?.aborted) {
+      try {
+        if (since) {
+          const missed = await this.events(since);
+          for (const event of missed) handleEvent(event);
+        }
+        await this.openStream(handleEvent, signal);
+        attempts = 0;
+      } catch (error) {
+        if (signal?.aborted || isAbortError(error)) return;
+        attempts += 1;
+      }
+      if (!signal?.aborted) {
+        await sleep(Math.min(5000, 500 * Math.max(1, attempts)), signal);
+      }
+    }
+  }
+
+  private async openStream(onEvent: (event: RoomEvent) => void, signal?: AbortSignal): Promise<void> {
     const url = `${this.baseUrl()}/stream`;
     const res = await fetch(url, { signal });
     if (!res.ok || !res.body) {
@@ -77,4 +116,19 @@ export class RoomClient {
   private baseUrl(): string {
     return `${this.serverUrl.replace(/\/$/, "")}/rooms/${encodeURIComponent(this.room)}`;
   }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => {
+      clearTimeout(timer);
+      resolve();
+    }, { once: true });
+  });
 }
