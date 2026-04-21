@@ -13,6 +13,8 @@ Before publishing or pushing a release:
 
 2. Ask Claude Code to independently review and test the repository.
 
-3. Fix any blocking findings from that review.
+3. Keep `README.md` English-first. Put Chinese documentation in `README.zh-CN.md` or another separate Chinese file.
 
-4. Push only after the local checks and Claude Code review both pass.
+4. Fix any blocking findings from that review.
+
+5. Push only after the local checks and Claude Code review both pass.

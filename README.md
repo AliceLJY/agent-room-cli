@@ -2,6 +2,8 @@
 
 Local CLI room for a human, Claude Code, and Codex.
 
+Chinese documentation: [README.zh-CN.md](README.zh-CN.md).
+
 The design goal is simple: keep the original AI CLIs, put them in one shared terminal room, and make agents answer only when they are mentioned.
 
 ```text
