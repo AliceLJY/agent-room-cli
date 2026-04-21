@@ -136,15 +136,17 @@ agent-room trio --room dev --name Alice --fresh \
   --codex-arg=--ask-for-approval --codex-arg=never
 ```
 
-在 `agent-room host` 内部：
+在 `agent-room host` 里（房间开着时，在 `you>` 提示符后面敲）：
 
 - `/who` 列出参与者
 - `/history` 打印最近 transcript
 - `/exit` 自动归档当前 transcript 并停止 host
 
+记一个规律就不会混：`/` 开头的是房间命令（在 host 里敲），`agent-room` 开头的是系统命令（在任何终端里敲，不用进房间）。
+
 ## 回头查以前的聊天
 
-`/exit` 时 host 会把整个房间写成一份 markdown，路径是 `~/.agent-room/archives/<房间名>/<年-月-日-时分秒>.md`。以后想翻旧账只要一条命令：
+`/exit` 时 host 会把整个房间写成一份 markdown，路径是 `~/.agent-room/archives/<房间名>/<年-月-日-时分秒>.md`。以后想翻旧账，打开任何终端——不用在房间里——敲：
 
 ```bash
 agent-room list

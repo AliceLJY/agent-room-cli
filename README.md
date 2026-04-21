@@ -136,15 +136,17 @@ agent-room trio --room dev --name Alice --fresh \
   --codex-arg=--ask-for-approval --codex-arg=never
 ```
 
-Inside `agent-room host`:
+Inside `agent-room host` (you type these at the `you>` prompt while the room is running):
 
 - `/who` lists participants
 - `/history` prints recent transcript
 - `/exit` archives the current transcript automatically and stops the host
 
+Rule of thumb: commands that start with `/` are room commands (typed inside the host). Commands that start with `agent-room` are shell commands (typed in any terminal, no room needed).
+
 ## Finding Past Discussions
 
-When you `/exit`, the host writes a markdown archive of the whole room at `~/.agent-room/archives/<room>/<yyyy-mm-dd-HHMMSS>.md`. To browse past rooms later:
+When you `/exit`, the host writes a markdown archive of the whole room at `~/.agent-room/archives/<room>/<yyyy-mm-dd-HHMMSS>.md`. To browse past rooms later, open any terminal — you do not need to be in a room:
 
 ```bash
 agent-room list
