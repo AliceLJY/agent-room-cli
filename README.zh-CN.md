@@ -142,6 +142,12 @@ agent-room trio --room dev --name Alice --fresh \
 - `/history` 打印最近 transcript
 - `/exit` 停止 host
 
+## 设计约束
+
+改动路由、transcript schema，或任何让 agent 在没有人类 @ 的情况下触发另一个 agent 的路径之前，请先读 [docs/design-principles.md](docs/design-principles.md)（英文）。里面写清楚了这个 repo 依赖的几条不变式：为什么 `mentioned` 是默认、真正要做 agent-to-agent handoff 的话需要同时设计什么（dedup / ack / TTL / 单次消费），以及要让 transcript 支持跨 session resume 需要哪些现在还没有的字段。
+
+发布步骤见 [docs/release-checklist.md](docs/release-checklist.md)。
+
 ## 借鉴来源
 
 - Stoops：终端房间、MCP tools、tmux 注入、engagement modes

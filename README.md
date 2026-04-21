@@ -142,6 +142,12 @@ Inside `agent-room host`:
 - `/history` prints recent transcript
 - `/exit` stops the host
 
+## Design Notes
+
+Before changing routing, transcript schema, or anything that lets an agent trigger another agent without a human mention, read [docs/design-principles.md](docs/design-principles.md). It captures the invariants the rest of this repo depends on: why `mentioned` is the default, what a real agent-to-agent handoff would need (dedup, ack, TTL, single-consumption), and what transcript resume would require beyond message order.
+
+Release steps live in [docs/release-checklist.md](docs/release-checklist.md).
+
 ## Borrowed Ideas
 
 - Stoops: terminal room, MCP tools, tmux injection, engagement modes
