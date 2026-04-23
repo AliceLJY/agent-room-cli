@@ -162,11 +162,27 @@ you> @cc @codex 接上 ~/.agent-room/archives/dev/2026-04-22-012638.md 的讨论
 
 agent 会自己 Read 那份 markdown。relay 不会主动把旧上下文塞进新会话——只有你显式引用的内容才进入 agent 上下文。这么设计的原因见 [docs/design-principles.md](docs/design-principles.md)（英文）。
 
+## 写入时的密钥剔除
+
+每一条进入房间的消息在落到 JSONL transcript、推上 SSE 流、进入 `catch_up` buffer 之前，都会先过一层保守的 pattern 匹配。目前覆盖 PEM block、JWT、常见 API key（OpenAI / Anthropic / GitHub / AWS / Google / Slack）、bearer token，以及整行 `Authorization:` header。命中的部分会替换成 `[REDACTED:<type>]`，服务端会 warn 一行命中摘要。
+
+这一层对应 design-principles §3a 的写入侧防线——secret 一旦落盘，在 transcript / 归档 / catch_up 里都可能被读出来，撤回成本极高，所以过滤必须在第一次写入之前发生。pattern 集合刻意保守，要扩也优先新增 pattern + 测试，而不是加熵启发。
+
+## Buffer 截断提示
+
+每个 agent 在两次 mention 之间会把其它消息缓冲在本地。buffer 上限是 30 条，防止下一次 mention 注入时 prompt 炸掉（Codex 上下文尤其窄）。超过上限时最早的消息会被丢弃，丢弃条数会在下一次注入的 prompt 里作为一行 sentinel 出现，并指向 `agent_room.catch_up`。这保留了 design-principles §4 的 pull-by-reference 原则——relay 不主动把被丢弃的内容再塞回来，只告诉 agent "有这回事，需要自己拉"。
+
 ## 设计约束
 
 改动路由、transcript schema，或任何让 agent 在没有人类 @ 的情况下触发另一个 agent 的路径之前，请先读 [docs/design-principles.md](docs/design-principles.md)（英文）。里面写清楚了这个 repo 依赖的几条不变式：为什么 `mentioned` 是默认、真正要做 agent-to-agent handoff 的话需要同时设计什么（dedup / ack / TTL / 单次消费），以及要让 transcript 支持跨 session resume 需要哪些现在还没有的字段。
 
 发布步骤见 [docs/release-checklist.md](docs/release-checklist.md)。
+
+## 与 trio 的关系
+
+这个房间实现的是 `~/.claude/skills/trio/SKILL.md` 这份协议（通过 symlink 同步到 `~/.codex/skills/trio/SKILL.md` 给 Codex 侧看）。`trio` 定义了 Alice × Claude × Codex 三人协作的角色分工、默认流程、触发短语（`预读 brief` / `反向产品经理` / `借鉴审计` / `盲点扫描` / `三角制衡`）。`agent-room-cli` 是让这些短语真的能在共享终端里被"说出来并触发"的 runtime，不再只是一份心智模型。
+
+想借鉴这个 repo 的人：先读 trio skill 拿协议，再回来看这个 repo 是怎么用薄 relay 把协议变成可以敲的命令。
 
 ## 借鉴来源
 

@@ -162,11 +162,27 @@ you> @cc @codex carrying on from ~/.agent-room/archives/dev/2026-04-22-012638.md
 
 The agents read the archive on demand. The relay never force-injects past context — only what you explicitly reference enters an agent's context. See [docs/design-principles.md](docs/design-principles.md) for why this is intentional.
 
+## Secret Redaction on Write
+
+Every message sent through the room passes a conservative pattern-based redactor before it reaches the JSONL transcript, the SSE stream, or any `catch_up` buffer. The redactor targets PEM blocks, JWTs, common API keys (OpenAI, Anthropic, GitHub, AWS, Google, Slack), bearer tokens, and full `Authorization:` header lines. Matches are replaced with `[REDACTED:<type>]` and the server logs a short summary.
+
+This is the write-side guard promised by design-principles §3a — once secrets enter a persistent transcript they are reachable in multiple places and effectively unrecoverable, so filtering happens before the first write. The pattern set is intentionally narrow; extend it with new tests rather than entropy heuristics.
+
+## Buffer Drop Sentinel
+
+Non-triggering messages are buffered per-agent until the next mention. The buffer is capped at 30 messages to keep injected prompts small (especially for Codex). When the cap is exceeded, the oldest messages are dropped and the count is surfaced in the next injected prompt as a single sentinel line that points the agent at `agent_room.catch_up`. This preserves the pull-by-reference model from design-principles §4 — the relay never re-injects dropped content on its own.
+
 ## Design Notes
 
 Before changing routing, transcript schema, or anything that lets an agent trigger another agent without a human mention, read [docs/design-principles.md](docs/design-principles.md). It captures the invariants the rest of this repo depends on: why `mentioned` is the default, what a real agent-to-agent handoff would need (dedup, ack, TTL, single-consumption), and what transcript resume would require beyond message order.
 
 Release steps live in [docs/release-checklist.md](docs/release-checklist.md).
+
+## Relation to trio
+
+The upstream protocol this room implements is `~/.claude/skills/trio/SKILL.md` (mirrored to `~/.codex/skills/trio/SKILL.md` via symlink). `trio` defines the three-person collaboration model — the roles, the default flow, the trigger phrases (`预读 brief`, `反向产品经理`, `借鉴审计`, `盲点扫描`, `三角制衡`). `agent-room-cli` is the runtime that makes those phrases executable inside a shared terminal room instead of living only as a mental model.
+
+If you are reading this repo to borrow ideas: read the trio skill first for the protocol, then this repo for how a thin relay turns that protocol into something you can type.
 
 ## Borrowed Ideas
 

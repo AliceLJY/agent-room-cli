@@ -117,23 +117,26 @@ export async function startAgentInTarget(
 
   const bridge = new AgentTmuxBridge(options.target, options.client);
   const abort = new AbortController();
-  const buffered: RoomMessage[] = [];
+  const buffer: BufferState = { messages: [], dropped: 0 };
   const streamTask = client.stream((event) => {
     const disposition = classifyEvent(event, participant.id, options.mode);
     if (event.type !== "message" || disposition === "drop") return;
     if (disposition === "content") {
-      buffered.push(event.message);
-      trimBuffer(buffered);
+      buffer.messages.push(event.message);
+      trimBuffer(buffer);
       return;
     }
 
-    const context = buffered.splice(0, buffered.length);
+    const context = buffer.messages.splice(0, buffer.messages.length);
+    const droppedBefore = buffer.dropped;
+    buffer.dropped = 0;
     const prompt = buildInjectionPrompt({
       room: options.room,
       agentName: options.name,
       agentIdentifier: options.identifier,
       context,
       trigger: event.message,
+      droppedBefore,
     });
     bridge.deliver(prompt);
   }, abort.signal).catch((error) => {
@@ -200,8 +203,23 @@ function ensureCliAvailable(client: "claude" | "codex"): void {
   }
 }
 
-function trimBuffer(messages: RoomMessage[]): void {
-  while (messages.length > 30) messages.shift();
+interface BufferState {
+  messages: RoomMessage[];
+  /** Messages dropped since the last trigger, surfaced in the next prompt. */
+  dropped: number;
+}
+
+// Buffer cap for non-triggered messages between consecutive triggers.
+// Keeping the number small protects small-context agents (Codex especially)
+// from a burst of room chatter arriving in one injected prompt. Dropped
+// messages remain on the server and can be retrieved via agent_room.catch_up.
+const BUFFER_MAX_MESSAGES = 30;
+
+function trimBuffer(buffer: BufferState): void {
+  while (buffer.messages.length > BUFFER_MAX_MESSAGES) {
+    buffer.messages.shift();
+    buffer.dropped += 1;
+  }
 }
 
 function shellQuote(value: string): string {

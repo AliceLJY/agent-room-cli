@@ -11,6 +11,7 @@ import type {
 } from "./types.js";
 import { JsonlRoomStore } from "./store.js";
 import { newId, slugifyName, stableId } from "./ids.js";
+import { redactSecrets } from "./redaction.js";
 
 interface RoomState {
   participants: Map<string, Participant>;
@@ -90,14 +91,25 @@ export class RoomHub {
       sender.lastSeenAt = now;
     }
 
+    // Redact secrets on the write path (design-principles §3a). This runs
+    // before the content hits the transcript, SSE stream, or catch_up
+    // buffer, so downstream readers never see the raw credential.
+    const { content: redactedContent, hits } = redactSecrets(input.content);
+    if (hits.length > 0) {
+      const summary = hits.map((h) => h.type).join(", ");
+      console.warn(
+        `[agent-room] redacted ${hits.length} secret-like token(s) from message in room="${room}" types=[${summary}]`,
+      );
+    }
+
     const message: RoomMessage = {
       id: newId("msg"),
       room,
       senderId: input.senderId,
       senderName: input.senderName || sender?.name || input.senderId,
       senderType: input.senderType || sender?.type || "human",
-      content: input.content,
-      mentions: detectMentions(input.content, [...state.participants.values()]),
+      content: redactedContent,
+      mentions: detectMentions(redactedContent, [...state.participants.values()]),
       createdAt: now,
     };
     state.messages.push(message);

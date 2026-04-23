@@ -34,10 +34,30 @@ export function buildInjectionPrompt(payload: {
   agentIdentifier: string;
   context: Array<{ senderName: string; content: string; createdAt: string }>;
   trigger: { senderName: string; content: string; createdAt: string };
+  /**
+   * Messages silently dropped from the buffer before the retained ones
+   * (e.g. because the per-agent buffer hit its cap). Surfacing the count
+   * keeps design-principles §4 pull-by-reference honest: the relay does
+   * not auto-inject the dropped content, but it does tell the agent those
+   * messages exist so it can choose to pull them via agent_room.catch_up.
+   */
+  droppedBefore?: number;
 }): string {
-  const contextLines = payload.context.length
-    ? payload.context.map((m) => `- [${m.senderName}] ${oneLine(m.content)}`).join("\n")
-    : "- (no buffered context)";
+  const contextParts: string[] = [];
+  const dropped = Math.max(0, payload.droppedBefore ?? 0);
+  if (dropped > 0) {
+    const noun = dropped === 1 ? "message" : "messages";
+    contextParts.push(
+      `- [agent-room] ${dropped} earlier ${noun} dropped to keep buffer small; call agent_room.catch_up if you need them.`,
+    );
+  }
+  if (payload.context.length) {
+    for (const m of payload.context) {
+      contextParts.push(`- [${m.senderName}] ${oneLine(m.content)}`);
+    }
+  } else if (dropped === 0) {
+    contextParts.push("- (no buffered context)");
+  }
 
   return [
     "[agent-room event]",
@@ -46,7 +66,7 @@ export function buildInjectionPrompt(payload: {
     "Do not reply to this room event only in plain terminal text; send the room-facing answer through the MCP tool.",
     "",
     "Buffered context since your last trigger:",
-    contextLines,
+    contextParts.join("\n"),
     "",
     `Triggered message from ${payload.trigger.senderName}:`,
     oneLine(payload.trigger.content),
