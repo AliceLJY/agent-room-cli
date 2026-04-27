@@ -25,11 +25,21 @@ export class JsonlRoomStore {
       throw error;
     }
 
-    return raw
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => JSON.parse(line) as RoomEvent);
+    const events: RoomEvent[] = [];
+    for (const [index, line] of raw.split("\n").entries()) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      try {
+        events.push(JSON.parse(trimmed) as RoomEvent);
+      } catch (error) {
+        console.warn(
+          `[agent-room] skipped invalid event JSON in ${file}:${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    return events;
   }
 }
 

@@ -22,6 +22,10 @@ export class RoomClient {
     return this.request<Participant>("PATCH", `/participants/${participantId}/mode`, { mode });
   }
 
+  async leave(participantId: string): Promise<{ ok: boolean }> {
+    return this.request<{ ok: boolean }>("DELETE", `/participants/${participantId}`);
+  }
+
   async send(input: SendMessageInput): Promise<RoomMessage> {
     return this.request<RoomMessage>("POST", "/messages", input);
   }
@@ -48,8 +52,11 @@ export class RoomClient {
       if (seen.has(event.id)) return;
       seen.add(event.id);
       if (seen.size > 1000) {
-        const oldest = seen.values().next().value;
-        if (oldest) seen.delete(oldest);
+        while (seen.size > 800) {
+          const oldest = seen.values().next();
+          if (oldest.done) break;
+          seen.delete(oldest.value);
+        }
       }
       since = event.createdAt;
       onEvent(event);

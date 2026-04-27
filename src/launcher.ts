@@ -148,6 +148,13 @@ export async function startAgentInTarget(
   return {
     participantId: participant.id,
     async stop() {
+      try {
+        await client.leave(participant.id);
+      } catch (error) {
+        console.warn(
+          `[agent-room] failed to leave room: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
       abort.abort();
       bridge.stop();
       await streamTask;
