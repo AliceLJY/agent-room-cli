@@ -1,6 +1,6 @@
 {
   "name": "agent-room-cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A local CLI room for humans, Claude Code, and Codex with mention-based agent routing.",
   "type": "module",
   "license": "MIT",
