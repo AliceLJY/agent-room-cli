@@ -28,6 +28,8 @@ cc> Updated recommendation...
 - mention-based trigger policy
 - buffered context for messages it did not need to answer immediately
 
+> The package also exposes an `agent-room-mcp` bin. This is an **internal** MCP server launched automatically by `agent-room run`; it is not meant to be invoked directly.
+
 This is closer to an OpenClaw-style local agent room than a Telegram bridge.
 
 ## Install
