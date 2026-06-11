@@ -55,7 +55,8 @@ export async function runAgent(options: AgentRuntimeOptions): Promise<void> {
   }, tmpDir);
 
   try {
-    console.log(`Joined room ${options.room} as @${options.identifier} (${options.client}).`);
+    console.log(`Launching @${options.identifier} (${options.client}) into room ${options.room}.`);
+    console.log("The room host prints '[room] @… connected' once the agent can actually hear it; /who shows connection state.");
     console.log(`tmux session: ${session}`);
     console.log(`mode: ${options.mode}`);
 

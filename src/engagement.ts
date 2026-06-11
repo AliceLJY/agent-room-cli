@@ -65,11 +65,13 @@ export function buildInjectionPrompt(payload: {
     "Use the agent_room.send_message MCP tool to reply to the room when a reply is useful.",
     "Do not reply to this room event only in plain terminal text; send the room-facing answer through the MCP tool.",
     "",
-    "Buffered context since your last trigger:",
+    "Buffered context since your last trigger (flattened; call agent_room.catch_up for verbatim text):",
     contextParts.join("\n"),
     "",
     `Triggered message from ${payload.trigger.senderName}:`,
-    oneLine(payload.trigger.content),
+    // Keep the trigger verbatim — pasted code/diffs lose meaning when
+    // whitespace is collapsed. Delivery is paste-safe (bracketed paste).
+    payload.trigger.content.trim(),
     "",
     "If the message asks you to respond, send one concise room message. If no response is needed, do nothing.",
     "[/agent-room event]",

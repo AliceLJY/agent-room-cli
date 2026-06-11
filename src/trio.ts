@@ -90,9 +90,10 @@ export async function runTrio(options: TrioOptions): Promise<void> {
       extraArgs: options.codexArgs,
     }));
 
-    console.log(`agent-room trio is ready: ${serverUrl}`);
+    console.log(`agent-room trio is starting: ${serverUrl}`);
     console.log(`tmux session: ${session}`);
     console.log("Use @cc, @codex, or @all from the left pane.");
+    console.log("Agents are still launching — the left pane prints '[room] @… connected' when each one can actually hear you. /who shows connection state.");
     console.log("Switch panes with mouse click, Ctrl-b + arrow keys, or Ctrl-b q then pane number.");
 
     if (options.attach) {

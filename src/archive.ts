@@ -12,7 +12,13 @@ export interface ArchiveLocation {
 export interface ArchiveEntry {
   file: string;
   room: string;
+  /**
+   * When the discussion last had activity (frontmatter `last_message_at`),
+   * falling back to `archived_at` for old archives. Re-archiving an unchanged
+   * room must not make a stale transcript look like a fresh discussion.
+   */
   createdAt: string;
+  archivedAt: string;
   messageCount: number;
   participantCount: number;
   sizeBytes: number;
@@ -149,7 +155,8 @@ async function readEntry(file: string, room: string, sizeBytes: number): Promise
   return {
     file,
     room: front.room || room,
-    createdAt: front.archived_at ?? "",
+    createdAt: front.last_message_at || front.archived_at || "",
+    archivedAt: front.archived_at ?? "",
     messageCount: Number(front.message_count ?? 0),
     participantCount: Number(front.participant_count ?? 0),
     sizeBytes,

@@ -130,7 +130,10 @@ describe("listArchives + writeArchive round-trip", () => {
     expect(entries[0].room).toBe("dev");
     expect(entries[0].messageCount).toBe(1);
     expect(entries[0].participantCount).toBe(2);
-    expect(entries[0].createdAt).toBe("2026-04-21T11:00:00.000Z");
+    // createdAt is last activity (the message time), not archive time —
+    // re-archiving a stale room must not make it look freshly discussed.
+    expect(entries[0].createdAt).toBe("2026-04-21T08:05:00.000Z");
+    expect(entries[0].archivedAt).toBe("2026-04-21T11:00:00.000Z");
     expect(entries[0].file).toBe(loc.file);
 
     const raw = await readFile(loc.file, "utf8");

@@ -126,9 +126,12 @@ export class AgentTmuxBridge {
   ) {}
 
   deliver(prompt: string): void {
-    const flattened = prompt.replace(/\s+/g, " ").trim();
-    if (!flattened) return;
-    this.queue.push(flattened);
+    // Do not collapse whitespace here: injection uses bracketed paste, so
+    // multi-line prompts arrive as one paste block in both CLIs, and pasted
+    // code/diff content keeps its formatting.
+    const text = prompt.trim();
+    if (!text) return;
+    this.queue.push(text);
     void this.drain();
   }
 
@@ -190,18 +193,19 @@ export class AgentTmuxBridge {
   }
 
   private async inject(text: string): Promise<void> {
-    if (this.client === "codex") {
-      tmuxInjectText(this.session, "\x1b[200~");
-      tmuxInjectText(this.session, text);
-      tmuxInjectText(this.session, "\x1b[201~");
-      await delay(150);
-      tmuxSendEnter(this.session);
-      return;
-    }
+    // Bracketed paste for both CLIs: multi-line text must arrive as one paste
+    // block, not raw keystrokes where every newline submits a fragment.
+    tmuxInjectText(this.session, "\x1b[200~");
     tmuxInjectText(this.session, text);
+    tmuxInjectText(this.session, "\x1b[201~");
+    await delay(150);
     tmuxSendEnter(this.session);
-    await delay(80);
-    tmuxSendEnter(this.session);
+    if (this.client === "claude") {
+      // Claude Code sometimes needs a second Enter to submit after a paste;
+      // a second Enter on an already-empty composer is a no-op.
+      await delay(80);
+      tmuxSendEnter(this.session);
+    }
   }
 
   private stopPolling(): void {

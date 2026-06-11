@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { RoomClient } from "./client.js";
 
@@ -11,12 +12,16 @@ interface Args {
   name: string;
 }
 
+const packageVersion: string = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+).version;
+
 const args = parseArgs(process.argv.slice(2));
 const client = new RoomClient(args.server, args.room);
 
 const server = new McpServer({
   name: "agent-room",
-  version: "0.1.0",
+  version: packageVersion,
 });
 
 server.tool(
@@ -72,6 +77,15 @@ server.tool(
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
+
+// This process only exists because the agent CLI actually spawned it, so a
+// successful MCP connect is the first honest "this agent can hear the room"
+// signal. The launcher's earlier registration only means "launch attempted".
+try {
+  await client.register({ id: args.id, name: args.name, type: "agent", confirmed: true });
+} catch {
+  // Room server may be unreachable; tool calls will surface the error.
+}
 
 function parseArgs(argv: string[]): Args {
   const result: Partial<Args> = {};

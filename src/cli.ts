@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { createInterface } from "node:readline/promises";
+import { clearLine, cursorTo } from "node:readline";
 import { stdin as input, stdout as output } from "node:process";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { RoomClient } from "./client.js";
 import { slugifyName, stableId } from "./ids.js";
+import { LineAggregator } from "./line-aggregator.js";
 import { JsonlRoomStore } from "./store.js";
 import { RoomHub, startRoomServer } from "./room-server.js";
 import { runAgent } from "./launcher.js";
@@ -20,10 +23,14 @@ import type { EngagementMode } from "./types.js";
 
 const program = new Command();
 
+export const packageVersion: string = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+).version;
+
 program
   .name("agent-room")
   .description("Local CLI room for humans, Claude Code, and Codex")
-  .version("0.1.0");
+  .version(packageVersion);
 
 program.command("host")
   .description("Start a local room server and join as a human")
@@ -64,12 +71,42 @@ program.command("host")
 
     const abort = new AbortController();
     let closed = false;
+    let rlRef: ReturnType<typeof createInterface> | null = null;
+
+    // Print an incoming line above the prompt without corrupting whatever the
+    // human is currently typing (the old direct output.write was the likely
+    // cause of the "first line keeps repeating" report from 2026-04-23).
+    const printAbove = (line: string) => {
+      if (rlRef && !closed && input.isTTY) {
+        clearLine(output, 0);
+        cursorTo(output, 0);
+        output.write(`${line}\n`);
+        rlRef.prompt(true);
+      } else {
+        output.write(`${line}\n`);
+        if (!closed && input.isTTY) output.write("you> ");
+      }
+    };
+
     const streamClient = new RoomClient(server.url, room);
     const streamTask = streamClient.stream((event) => {
+      // Surface real agent readiness: the launcher's registration only means
+      // "launch attempted"; confirmed=true comes from the agent's own MCP
+      // server and is the honest "this agent can hear the room" signal.
+      if (event.type === "participant_joined" && event.participant.type === "agent") {
+        const p = event.participant;
+        printAbove(p.confirmed
+          ? `[room] @${p.identifier} connected (${p.client})`
+          : `[room] launching @${p.identifier} (${p.client})…`);
+        return;
+      }
+      if (event.type === "participant_left" && event.participant.type === "agent") {
+        printAbove(`[room] @${event.participant.identifier} left`);
+        return;
+      }
       if (event.type !== "message") return;
       if (event.message.senderId === participant.id) return;
-      output.write(`\n${event.message.senderName}> ${event.message.content}\n`);
-      if (!closed && input.isTTY) output.write("you> ");
+      printAbove(`${event.message.senderName}> ${event.message.content}`);
     }, abort.signal).catch((error) => {
       if (!abort.signal.aborted) {
         console.error(`room stream stopped: ${error.message}`);
@@ -101,50 +138,56 @@ program.command("host")
     }
 
     const rl = createInterface({ input, output, prompt: "you> " });
+    rlRef = rl;
     rl.prompt();
-    rl.on("line", async (line) => {
-      const text = line.trim();
+
+    const handleSubmit = async (text: string) => {
+      // Commands are single-line only; a pasted block that happens to contain
+      // "/exit" on some line is content, not a command.
+      const isCommand = !text.includes("\n") && text.startsWith("/");
       let shouldPrompt = true;
       try {
-        if (!text) {
-          return;
-        }
-        if (text === "/exit" || text === "/quit") {
+        if (isCommand && (text === "/exit" || text === "/quit")) {
           shouldPrompt = false;
           const saved = await autosave();
           if (saved) console.log(`archived: ${saved}`);
           rl.close();
           return;
         }
-        if (text === "/who") {
+        if (isCommand && text === "/who") {
           const snapshot = await hub.snapshot(room);
           for (const p of snapshot.participants) {
-            console.log(`@${p.identifier} (${p.name}) — ${p.type}/${p.client}, mode=${p.mode}`);
+            const ready = p.type === "agent" ? (p.confirmed ? ", connected" : ", not confirmed") : "";
+            console.log(`@${p.identifier} (${p.name}) — ${p.type}/${p.client}, mode=${p.mode}${ready}`);
           }
-          rl.prompt();
           return;
         }
-        if (text === "/history") {
+        if (isCommand && text === "/history") {
           const messages = await hub.messages(room, 50);
           for (const message of messages) {
             console.log(`${message.senderName}> ${message.content}`);
           }
-          rl.prompt();
           return;
         }
-        const message = await hub.sendMessage(room, {
+        await hub.sendMessage(room, {
           senderId: participant.id,
           senderName: participant.name,
           senderType: "human",
           content: text,
         });
-        void message;
       } catch (error) {
         console.error(error instanceof Error ? error.message : String(error));
       } finally {
         if (shouldPrompt) rl.prompt();
       }
+    };
+
+    // readline emits one `line` per pasted line; aggregate paste bursts into
+    // one multi-line message instead of N fragments (2026-04-23 report).
+    const aggregator = new LineAggregator((text) => {
+      void handleSubmit(text);
     });
+    rl.on("line", (line) => aggregator.push(line));
 
     let signalShutdown: Promise<void> | null = null;
     const onSignal = (signal: NodeJS.Signals) => {
@@ -162,6 +205,7 @@ program.command("host")
 
     await new Promise<void>((resolve) => rl.on("close", resolve));
     closed = true;
+    aggregator.stop();
     if (signalShutdown) await signalShutdown;
     process.off("SIGINT", onSignal);
     process.off("SIGTERM", onSignal);
@@ -278,7 +322,7 @@ program.command("list")
     for (const entry of filtered) {
       const when = entry.createdAt || "?";
       const kb = Math.max(1, Math.round(entry.sizeBytes / 1024));
-      console.log(`${when}  room=${entry.room}  messages=${entry.messageCount}  ${kb}KB`);
+      console.log(`last-activity=${when}  room=${entry.room}  messages=${entry.messageCount}  ${kb}KB`);
       console.log(`  ${entry.file}`);
     }
   });

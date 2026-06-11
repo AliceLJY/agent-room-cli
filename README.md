@@ -73,6 +73,10 @@ you> @all settle on the final version
 
 Mouse pane switching is enabled. You can click the Codex pane to finish login, or use `Ctrl-b` then an arrow key. `Ctrl-b q` shows pane numbers.
 
+Pane creation is not readiness. The left pane prints `[room] launching @cc (claude)…` when an agent launch is attempted, and `[room] @cc connected (claude)` once that agent's MCP server is actually attached to the room. Wait for `connected` before mentioning an agent; `/who` also shows per-agent connection state.
+
+Multi-line pastes into the `you>` prompt are aggregated into one message instead of one message per line, and prompts injected into agent panes use bracketed paste — pasted code and diffs keep their formatting end to end.
+
 Codex uses your normal `~/.codex` login state. `agent-room` only passes the room MCP config as temporary CLI overrides, so restarting the room should not require a fresh Codex login.
 
 To create the tmux room without attaching immediately:
@@ -140,7 +144,7 @@ agent-room trio --room dev --name Alice --fresh \
 
 Inside `agent-room host` (you type these at the `you>` prompt while the room is running):
 
-- `/who` lists participants
+- `/who` lists participants and per-agent connection state
 - `/history` prints recent transcript
 - `/exit` archives the current transcript automatically and stops the host
 
@@ -154,7 +158,7 @@ When you `/exit`, the host writes a markdown archive of the whole room at `~/.ag
 agent-room list
 ```
 
-Each entry prints a timestamp, the room name, message count, size, and the full archive path. Open the `.md` file with any markdown reader (or `cat`, `less`, your editor).
+Each entry prints the last-activity time (when the discussion last had a message — not when the file was archived, so re-archiving a stale room cannot make it look fresh), the room name, message count, size, and the full archive path. Open the `.md` file with any markdown reader (or `cat`, `less`, your editor).
 
 To continue a past discussion in a fresh room, paste the archive path into your first mention:
 

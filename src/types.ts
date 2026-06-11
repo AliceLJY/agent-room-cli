@@ -21,6 +21,12 @@ export interface Participant {
   joinedAt: string;
   lastSeenAt: string;
   status: "online" | "offline";
+  /**
+   * For agents: true once the agent's own MCP server re-registered, i.e. the
+   * CLI really spawned and can hear the room. The launcher's initial
+   * registration leaves this false ("launch attempted" is not "ready").
+   */
+  confirmed?: boolean;
 }
 
 export interface RoomMessage {
@@ -70,6 +76,7 @@ export interface RegisterParticipantInput {
   type?: ParticipantType;
   client?: AgentClient;
   mode?: EngagementMode;
+  confirmed?: boolean;
 }
 
 export interface SendMessageInput {

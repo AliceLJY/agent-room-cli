@@ -31,17 +31,20 @@ export class RoomHub {
     const id = input.id || stableId(`${room}:${identifier}`, "p");
     const now = new Date().toISOString();
     const existing = state.participants.get(id);
+    // Re-registration (e.g. the agent's MCP server confirming readiness) must
+    // merge with the existing record, not reset mode/client back to defaults.
     const participant: Participant = {
       id,
       room,
       name: input.name,
       identifier,
-      type: input.type || "human",
-      client: input.client || (input.type === "agent" ? "unknown" : "human"),
-      mode: input.mode || "mentioned",
+      type: input.type || existing?.type || "human",
+      client: input.client || existing?.client || (input.type === "agent" ? "unknown" : "human"),
+      mode: input.mode || existing?.mode || "mentioned",
       joinedAt: existing?.joinedAt || now,
       lastSeenAt: now,
       status: "online",
+      confirmed: input.confirmed ?? existing?.confirmed ?? false,
     };
 
     state.participants.set(id, participant);

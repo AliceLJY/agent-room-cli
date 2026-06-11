@@ -71,6 +71,10 @@ you> @all settle on the final version
 
 默认已开启鼠标切 pane。Codex 要登录时，可以直接点右下角 Codex 窗格处理；也可以按 `Ctrl-b` 再按方向键切换，或者 `Ctrl-b q` 显示 pane 编号后按数字。
 
+窗格出现不等于 agent 就绪。左边窗格会先打印 `[room] launching @cc (claude)…`（表示开始启动），等该 agent 的 MCP 真正接上房间后才打印 `[room] @cc connected (claude)`。@ 一个 agent 之前先等它的 `connected`；`/who` 也能看每个 agent 的连接状态。
+
+在 `you>` 提示符里粘贴多行文本会聚合成一条消息（不再一行变一条）；注入到 agent 窗格的 prompt 走 bracketed paste，贴进去的代码和 diff 全程保留格式。
+
 Codex 会复用你正常的 `~/.codex` 登录态。`agent-room` 只会通过临时 CLI 参数传入房间 MCP 配置，所以重开房间不应该要求重新登录 Codex。
 
 如果只想创建 tmux 房间、稍后自己 attach：
@@ -138,7 +142,7 @@ agent-room trio --room dev --name Alice --fresh \
 
 在 `agent-room host` 里（房间开着时，在 `you>` 提示符后面敲）：
 
-- `/who` 列出参与者
+- `/who` 列出参与者和每个 agent 的连接状态
 - `/history` 打印最近 transcript
 - `/exit` 自动归档当前 transcript 并停止 host
 
@@ -152,7 +156,7 @@ agent-room trio --room dev --name Alice --fresh \
 agent-room list
 ```
 
-每条输出包括时间、房间名、消息数、文件大小和完整路径。用任何 markdown 阅读器（或 `cat`、编辑器）打开 `.md` 文件即可。
+每条输出的时间是该讨论的最后活动时间（最后一条消息的时间，不是归档时间——重复归档旧 transcript 不会让它看起来像新讨论），后面是房间名、消息数、文件大小和完整路径。用任何 markdown 阅读器（或 `cat`、编辑器）打开 `.md` 文件即可。
 
 想在新房间接着以前的讨论聊，首次 @ 时贴上 archive 路径：
 
