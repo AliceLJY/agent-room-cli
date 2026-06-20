@@ -139,6 +139,9 @@ program.command("host")
 
     const rl = createInterface({ input, output, prompt: "you> " });
     rlRef = rl;
+    // Ask the terminal to bracket pastes (DEC mode 2004) so paste bounds are
+    // explicit; disabled again before we leave.
+    output.write("\x1b[?2004h");
     rl.prompt();
 
     const handleSubmit = async (text: string) => {
@@ -184,10 +187,50 @@ program.command("host")
 
     // readline emits one `line` per pasted line; aggregate paste bursts into
     // one multi-line message instead of N fragments (2026-04-23 report).
-    const aggregator = new LineAggregator((text) => {
-      void handleSubmit(text);
-    });
+    //
+    // The final pasted line has no trailing newline, so readline never fires a
+    // `line` event for it — it stays in the edit buffer (rl.line) and used to
+    // be stranded at the prompt (2026-06-20 report). Hand that tail to the
+    // aggregator at flush time and wipe the buffer so the whole paste is sent.
+    // `rl.write(null, key)` throws on node v25, so reset the buffer state
+    // directly (verified writable + clean: a later Enter yields "", not a
+    // resend). The tail is already echoed on the current line; commit it with
+    // a newline so it stays on screen exactly like the earlier pasted lines
+    // (readline ended those with \r\n). Clearing the line instead made the last
+    // line visually vanish even though the full message was sent (2026-06-20
+    // follow-up: "内容进去了，但最后一行显示消失了").
+    const drainResidual = (): string | null => {
+      const tail = rl.line;
+      if (!tail) return null;
+      const editable = rl as unknown as { line: string; cursor: number };
+      editable.line = "";
+      editable.cursor = 0;
+      output.write("\r\n");
+      return tail;
+    };
+    const aggregator = new LineAggregator(
+      (text) => {
+        void handleSubmit(text);
+      },
+      undefined,
+      drainResidual,
+      (count) => {
+        // Pasted content is staged, not sent — hint that Enter sends it and
+        // that more can be pasted first.
+        output.write(`\x1b[2m  ⏎ 已暂存 ${count} 行 · 回车发送 · 可继续粘\x1b[0m\n`);
+        rl.prompt();
+      },
+    );
     rl.on("line", (line) => aggregator.push(line));
+
+    // Bracketed-paste markers arrive as keypress events without polluting the
+    // line content (verified) — use them as the authoritative paste boundary
+    // so a block stays whole however large or slowly chunked it is. Terminals
+    // that don't emit them fall back to the aggregator's 25ms window.
+    input.on("keypress", (_str: string | undefined, key: { sequence?: string } | undefined) => {
+      if (key?.sequence === "\x1b[200~") aggregator.beginPaste();
+      else if (key?.sequence === "\x1b[201~") aggregator.endPaste();
+    });
 
     let signalShutdown: Promise<void> | null = null;
     const onSignal = (signal: NodeJS.Signals) => {
@@ -205,6 +248,7 @@ program.command("host")
 
     await new Promise<void>((resolve) => rl.on("close", resolve));
     closed = true;
+    output.write("\x1b[?2004l"); // stop bracketed paste before leaving
     aggregator.stop();
     if (signalShutdown) await signalShutdown;
     process.off("SIGINT", onSignal);
