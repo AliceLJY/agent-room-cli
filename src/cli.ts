@@ -38,6 +38,7 @@ program.command("host")
   .option("-n, --name <name>", "your display name", process.env.USER || "human")
   .option("-p, --port <port>", "port", "43110")
   .option("--host <host>", "bind host", "127.0.0.1")
+  .option("--unsafe-no-auth", "allow an unauthenticated non-loopback bind")
   .option("--data-dir <path>", "JSONL store directory", join(homedir(), ".agent-room"))
   .action(async (opts) => {
     const room = String(opts.room);
@@ -46,6 +47,7 @@ program.command("host")
       hub,
       port: Number(opts.port),
       host: String(opts.host),
+      unsafeNoAuth: Boolean(opts.unsafeNoAuth),
     });
     const identifier = slugifyName(String(opts.name));
     const participant = await hub.registerParticipant(room, {
@@ -294,6 +296,7 @@ program.command("trio")
   .option("-n, --name <name>", "your display name", process.env.USER || "human")
   .option("-p, --port <port>", "port", "43110")
   .option("--host <host>", "bind host", "127.0.0.1")
+  .option("--unsafe-no-auth", "allow an unauthenticated non-loopback bind")
   .option("--data-dir <path>", "JSONL store directory", join(homedir(), ".agent-room"))
   .option("--cc-name <name>", "Claude Code display name and mention identifier", "cc")
   .option("--codex-name <name>", "Codex display name and mention identifier", "codex")
@@ -310,6 +313,7 @@ program.command("trio")
       room: String(opts.room),
       name: String(opts.name),
       host: String(opts.host),
+      unsafeNoAuth: Boolean(opts.unsafeNoAuth),
       port: Number(opts.port),
       dataDir: String(opts.dataDir),
       ccName: String(opts.ccName),

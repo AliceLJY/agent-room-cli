@@ -30,6 +30,13 @@ cc> Updated recommendation...
 
 它更接近 OpenClaw 式的本地 agent room，而不是 Telegram bridge。
 
+## 安全边界
+
+- 房间默认只绑定 `127.0.0.1`，并且**没有应用层鉴权**。`host` 和 `trio` 遇到非 loopback 的 `--host` 会拒绝启动，除非同时显式传入 `--unsafe-no-auth`。
+- `--unsafe-no-auth` 只是明确接受风险的逃生口，不是安全的远程模式：任何能连到该端口的设备都能读取 transcript、订阅 SSE、注册参与者和发送消息。远程使用应优先走保留 loopback 监听的鉴权隧道。
+- API 不开放跨域浏览器读取，JSON 请求体上限为 64 KiB。这些只是收窄暴露面的措施，不能代替鉴权。
+- `~/.agent-room/` 下的 JSONL transcript 和 markdown 归档仍是敏感明文。pattern 脱敏只能尽力而为，不能保证剔除所有凭据或隐私内容。
+
 ## 安装
 
 从 GitHub 安装：
@@ -170,7 +177,7 @@ agent 会自己 Read 那份 markdown。relay 不会主动把旧上下文塞进�
 
 每一条进入房间的消息在落到 JSONL transcript、推上 SSE 流、进入 `catch_up` buffer 之前，都会先过一层保守的 pattern 匹配。目前覆盖 PEM block、JWT、常见 API key（OpenAI / Anthropic / GitHub / AWS / Google / Slack）、bearer token，以及整行 `Authorization:` header。命中的部分会替换成 `[REDACTED:<type>]`，服务端会 warn 一行命中摘要。
 
-这一层对应 design-principles §3a 的写入侧防线——secret 一旦落盘，在 transcript / 归档 / catch_up 里都可能被读出来，撤回成本极高，所以过滤必须在第一次写入之前发生。pattern 集合刻意保守，要扩也优先新增 pattern + 测试，而不是加熵启发。
+这一层对应 design-principles §3a 的写入侧防线——secret 一旦进入 transcript，在归档 / catch_up 里也可能被读出来，撤回成本极高，所以过滤必须在第一次写入之前发生。pattern 集合刻意保守，要扩也优先新增 pattern + 测试，而不是加熵启发；即使没有出现脱敏警告，也要把 transcript 当敏感内容看待。
 
 ## Buffer 截断提示
 
@@ -195,4 +202,4 @@ agent 会自己 Read 那份 markdown。relay 不会主动把旧上下文塞进�
 - claude-code-studio：任务/team framing 和 agent identity
 - telegram-ai-bridge：loop-awareness 和 mention-first routing
 
-这个项目当前刻意保持小范围：local-only、一个 room server、先支持 Claude/Codex。
+这个项目当前刻意保持小范围：默认只绑定 loopback、一个 room server、先支持 Claude/Codex。

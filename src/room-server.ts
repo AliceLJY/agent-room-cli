@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { isIP } from "node:net";
 import { URL } from "node:url";
 import type {
   EngagementMode,
@@ -18,6 +19,35 @@ interface RoomState {
   messages: RoomMessage[];
   events: RoomEvent[];
   streams: Set<ServerResponse>;
+}
+
+export const MAX_JSON_BODY_BYTES = 64 * 1024;
+
+class HttpError extends Error {
+  constructor(
+    readonly statusCode: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "HttpError";
+  }
+}
+
+export function isLoopbackHost(host: string): boolean {
+  const normalized = host.trim().toLowerCase();
+  if (normalized === "localhost") return true;
+  if (isIP(normalized) === 4) return normalized.startsWith("127.");
+  if (isIP(normalized) === 6) {
+    return normalized === "::1" || normalized === "0:0:0:0:0:0:0:1";
+  }
+  return false;
+}
+
+export function assertSafeBindHost(host: string, unsafeNoAuth = false): void {
+  if (isLoopbackHost(host) || unsafeNoAuth) return;
+  throw new Error(
+    `refusing unauthenticated non-loopback bind "${host}"; use 127.0.0.1 or pass --unsafe-no-auth only when every network peer is trusted`,
+  );
 }
 
 export class RoomHub {
@@ -155,7 +185,7 @@ export class RoomHub {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
-      "Access-Control-Allow-Origin": "*",
+      "X-Content-Type-Options": "nosniff",
     });
     res.write(": connected\n\n");
     const keepAlive = setInterval(() => {
@@ -202,11 +232,20 @@ export async function startRoomServer(options: {
   hub: RoomHub;
   port: number;
   host?: string;
+  unsafeNoAuth?: boolean;
 }): Promise<{ url: string; close: () => Promise<void> }> {
-  const host = options.host || "127.0.0.1";
+  const host = (options.host || "127.0.0.1").trim();
+  assertSafeBindHost(host, options.unsafeNoAuth);
   const server = createServer((req, res) => {
     handleRequest(options.hub, req, res).catch((error) => {
-      sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
+      if (res.headersSent) {
+        res.destroy();
+        return;
+      }
+      const statusCode = error instanceof HttpError ? error.statusCode : 500;
+      sendJson(res, statusCode, {
+        error: error instanceof Error ? error.message : String(error),
+      });
     });
   });
   server.timeout = 0;
@@ -217,8 +256,9 @@ export async function startRoomServer(options: {
   await new Promise<void>((resolve) => server.listen(options.port, host, resolve));
   const address = server.address();
   const actualPort = typeof address === "object" && address ? address.port : options.port;
+  const urlHost = isIP(host) === 6 ? `[${host}]` : host;
   return {
-    url: `http://${host}:${actualPort}`,
+    url: `http://${urlHost}:${actualPort}`,
     close: () => new Promise((resolve) => server.close(() => resolve())),
   };
 }
@@ -316,18 +356,62 @@ export function detectMentions(content: string, participants: Participant[]): st
 }
 
 async function readJson<T>(req: IncomingMessage): Promise<T> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  const contentType = req.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase();
+  if (contentType !== "application/json") {
+    req.resume();
+    throw new HttpError(415, "Content-Type must be application/json");
   }
-  if (chunks.length === 0) return {} as T;
-  return JSON.parse(Buffer.concat(chunks).toString("utf8")) as T;
+
+  const declaredLength = Number(req.headers["content-length"]);
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_JSON_BODY_BYTES) {
+    req.resume();
+    throw new HttpError(413, `JSON body exceeds ${MAX_JSON_BODY_BYTES} bytes`);
+  }
+
+  return new Promise<T>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let received = 0;
+    let settled = false;
+
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      chunks.length = 0;
+      reject(error);
+    };
+
+    req.on("data", (chunk: Buffer | string) => {
+      if (settled) return;
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      received += buffer.length;
+      if (received > MAX_JSON_BODY_BYTES) {
+        fail(new HttpError(413, `JSON body exceeds ${MAX_JSON_BODY_BYTES} bytes`));
+        return;
+      }
+      chunks.push(buffer);
+    });
+    req.on("end", () => {
+      if (settled) return;
+      settled = true;
+      if (chunks.length === 0) {
+        resolve({} as T);
+        return;
+      }
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")) as T);
+      } catch {
+        reject(new HttpError(400, "invalid JSON body"));
+      }
+    });
+    req.on("aborted", () => fail(new HttpError(400, "request body was aborted")));
+    req.on("error", (error) => fail(error));
+  });
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
+    "Content-Type": "application/json; charset=utf-8",
+    "X-Content-Type-Options": "nosniff",
   });
   res.end(JSON.stringify(body));
 }

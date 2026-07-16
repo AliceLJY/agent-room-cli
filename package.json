@@ -1,6 +1,6 @@
 {
   "name": "agent-room-cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A local CLI room for humans, Claude Code, and Codex with mention-based agent routing.",
   "type": "module",
   "license": "MIT",
@@ -26,6 +26,7 @@
   },
   "files": [
     "dist",
+    "scripts/package-smoke.mjs",
     "docs/design-principles.md",
     "docs/release-checklist.md",
     "README.md",
@@ -34,7 +35,9 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "check": "npm test && npm run typecheck && npm run build && npm run package:check",
     "dev": "tsx src/cli.ts",
+    "package:check": "node scripts/package-smoke.mjs",
     "prepare": "npm run build",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"

@@ -32,6 +32,13 @@ cc> Updated recommendation...
 
 This is closer to an OpenClaw-style local agent room than a Telegram bridge.
 
+## Security Boundary
+
+- The room binds to `127.0.0.1` by default and has **no application-level authentication**. `host` and `trio` refuse a non-loopback `--host` unless you also pass `--unsafe-no-auth`.
+- `--unsafe-no-auth` is an explicit escape hatch, not a secure remote mode: every peer that can reach the port can read the transcript, follow the SSE stream, register participants, and send messages. Prefer an authenticated tunnel that keeps the room listener on loopback.
+- The API does not enable cross-origin browser reads, and JSON request bodies are capped at 64 KiB. These are containment measures, not authentication.
+- JSONL transcripts and markdown archives remain sensitive plaintext under `~/.agent-room/`. Pattern-based redaction is best effort and cannot guarantee that every credential or private detail is removed.
+
 ## Install
 
 From GitHub:
@@ -172,7 +179,7 @@ The agents read the archive on demand. The relay never force-injects past contex
 
 Every message sent through the room passes a conservative pattern-based redactor before it reaches the JSONL transcript, the SSE stream, or any `catch_up` buffer. The redactor targets PEM blocks, JWTs, common API keys (OpenAI, Anthropic, GitHub, AWS, Google, Slack), bearer tokens, and full `Authorization:` header lines. Matches are replaced with `[REDACTED:<type>]` and the server logs a short summary.
 
-This is the write-side guard promised by design-principles §3a — once secrets enter a persistent transcript they are reachable in multiple places and effectively unrecoverable, so filtering happens before the first write. The pattern set is intentionally narrow; extend it with new tests rather than entropy heuristics.
+This is the write-side guard promised by design-principles §3a — once secrets enter a persistent transcript they are reachable in multiple places and effectively unrecoverable, so filtering happens before the first write. The pattern set is intentionally narrow; extend it with new tests rather than entropy heuristics. Treat the transcript as sensitive even when no redaction warning appeared.
 
 ## Buffer Drop Sentinel
 
@@ -197,4 +204,4 @@ If you are reading this repo to borrow ideas: read the trio skill first for the 
 - claude-code-studio: task/team framing and agent identity
 - telegram-ai-bridge: loop-awareness and mention-first routing
 
-This project intentionally starts smaller: local-only, one room server, Claude/Codex first.
+This project intentionally starts smaller: loopback by default, one room server, Claude/Codex first.

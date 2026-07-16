@@ -3,6 +3,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { slugifyName } from "./ids.js";
 import { startAgentInTarget } from "./launcher.js";
+import { assertSafeBindHost } from "./room-server.js";
 import {
   tmuxAttach,
   tmuxAvailable,
@@ -20,6 +21,7 @@ export interface TrioOptions {
   room: string;
   name: string;
   host: string;
+  unsafeNoAuth: boolean;
   port: number;
   dataDir: string;
   ccName: string;
@@ -35,6 +37,7 @@ export interface TrioOptions {
 }
 
 export async function runTrio(options: TrioOptions): Promise<void> {
+  assertSafeBindHost(options.host, options.unsafeNoAuth);
   if (!tmuxAvailable()) {
     throw new Error("tmux is required. Install it first: brew install tmux");
   }
@@ -113,7 +116,7 @@ export async function runTrio(options: TrioOptions): Promise<void> {
 }
 
 function hostCommand(options: TrioOptions): string {
-  return [
+  const args = [
     shellQuote(process.execPath),
     shellQuote(fileURLToPath(new URL("./cli.js", import.meta.url))),
     "host",
@@ -127,7 +130,9 @@ function hostCommand(options: TrioOptions): string {
     shellQuote(String(options.port)),
     "--data-dir",
     shellQuote(options.dataDir),
-  ].join(" ");
+  ];
+  if (options.unsafeNoAuth) args.push("--unsafe-no-auth");
+  return args.join(" ");
 }
 
 async function waitForHealth(serverUrl: string): Promise<void> {

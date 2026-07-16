@@ -78,6 +78,12 @@ If a proposed feature would be equally well expressed as:
 
 prefer those over adding it to the relay. The native CLIs already have skills, memory, and auth. Duplicating any of that here is how this project stops being small.
 
+## 6. Loopback is the default network boundary
+
+The room protocol has no application-level authentication. The server therefore binds to loopback by default and must reject non-loopback hosts unless the operator explicitly chooses `--unsafe-no-auth`. That flag records acceptance of an unauthenticated network surface; it does not make the surface safe.
+
+Wildcard browser CORS is out of scope, and request-size limits protect availability rather than identity. If remote access is needed, keep the room listener on loopback and put an authenticated tunnel in front of it instead of growing an account system inside this thin relay.
+
 ## Prior decisions that embody these principles
 
 - `src/engagement.ts` — mention-first routing is centralized here; changes to it are load-bearing.

@@ -5,10 +5,8 @@ Before publishing or pushing a release:
 1. Run the local verification commands:
 
    ```bash
-   npm test
-   npm run typecheck
-   npm run build
-   npm pack --dry-run
+   npm ci --ignore-scripts
+   npm run check
    ```
 
 2. Ask Claude Code to independently review and test the repository.
@@ -17,4 +15,4 @@ Before publishing or pushing a release:
 
 4. Fix any blocking findings from that review.
 
-5. Push only after the local checks and Claude Code review both pass.
+5. Push only after the local checks, Claude Code review, and GitHub Actions CI all pass.
