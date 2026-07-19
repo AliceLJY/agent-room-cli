@@ -17,7 +17,7 @@ import { redactSecrets } from "./redaction.js";
 interface RoomState {
   participants: Map<string, Participant>;
   messages: RetainedBuffer<RoomMessage>;
-  messageIds: Set<string>;
+  retainedMessageIds: Set<string>;
   events: RetainedBuffer<RoomEvent>;
   streams: Set<ServerResponse>;
   mutationTail: Promise<void>;
@@ -255,20 +255,35 @@ export class RoomHub {
   async stream(room: string, res: ServerResponse): Promise<void> {
     const state = await this.getRoom(room);
     state.streams.add(res);
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      "X-Content-Type-Options": "nosniff",
-    });
-    res.write(": connected\n\n");
-    const keepAlive = setInterval(() => {
-      res.write(": heartbeat\n\n");
-    }, 15_000);
-    res.on("close", () => {
-      clearInterval(keepAlive);
+    let keepAlive: ReturnType<typeof setInterval> | undefined;
+    const cleanup = () => {
+      if (keepAlive) clearInterval(keepAlive);
       state.streams.delete(res);
-    });
+    };
+    res.on("close", cleanup);
+    res.on("error", cleanup);
+    res.on("finish", cleanup);
+
+    try {
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "X-Content-Type-Options": "nosniff",
+      });
+      res.write(": connected\n\n");
+      keepAlive = setInterval(() => {
+        try {
+          res.write(": heartbeat\n\n");
+        } catch {
+          cleanup();
+          res.destroy();
+        }
+      }, 15_000);
+    } catch (error) {
+      cleanup();
+      throw error;
+    }
   }
 
   private async getRoom(room: string): Promise<RoomState> {
@@ -305,7 +320,7 @@ export class RoomHub {
     const state: RoomState = {
       participants: new Map(),
       messages: new RetainedBuffer(this.maxMessagesPerRoom),
-      messageIds: new Set(),
+      retainedMessageIds: new Set(),
       events: new RetainedBuffer(this.maxEventsPerRoom),
       streams: new Set(),
       mutationTail: Promise.resolve(),
@@ -324,7 +339,18 @@ export class RoomHub {
     state.events.append(event);
     const payload = `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
     for (const stream of state.streams) {
-      stream.write(payload);
+      if (stream.destroyed || stream.writableEnded) {
+        state.streams.delete(stream);
+        continue;
+      }
+      try {
+        stream.write(payload);
+      } catch {
+        // A disconnected subscriber must not turn an already-persisted event
+        // into an apparent mutation failure or block the remaining streams.
+        state.streams.delete(stream);
+        stream.destroy();
+      }
     }
   }
 
@@ -435,10 +461,12 @@ function applyEvent(state: RoomState, event: RoomEvent): void {
     state.participants.delete(event.participant.id);
   }
   if (event.type === "message") {
-    if (!state.messageIds.has(event.message.id)) {
+    // Deduplication intentionally covers the retained window only. Keeping all
+    // historical IDs would reintroduce unbounded per-room memory growth.
+    if (!state.retainedMessageIds.has(event.message.id)) {
       const evicted = state.messages.append(event.message);
-      if (evicted) state.messageIds.delete(evicted.id);
-      state.messageIds.add(event.message.id);
+      if (evicted) state.retainedMessageIds.delete(evicted.id);
+      state.retainedMessageIds.add(event.message.id);
     }
   }
 }

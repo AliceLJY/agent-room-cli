@@ -158,8 +158,11 @@ export class RoomClient {
       return json as T;
     } catch (error) {
       if (timedOut) {
+        const mutationWarning = method === "GET"
+          ? ""
+          : "; the server may still have applied the mutation";
         throw new Error(
-          `${method} ${path || "/"} timed out after ${this.requestTimeoutMs}ms`,
+          `${method} ${path || "/"} timed out after ${this.requestTimeoutMs}ms${mutationWarning}`,
           { cause: error },
         );
       }

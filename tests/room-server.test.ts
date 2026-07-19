@@ -1,4 +1,6 @@
+import { EventEmitter } from "node:events";
 import { mkdtempSync, rmSync } from "node:fs";
+import type { ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -224,6 +226,33 @@ describe("RoomHub capacity", () => {
     expect(store.loadCalls).toBe(0);
   });
 
+  it("limits message-ID deduplication to the retained window", async () => {
+    const store = new JsonlRoomStore(dir);
+    const first = messageEvent("first");
+    const second = messageEvent("second");
+    const third = messageEvent("third");
+
+    for (const event of [first, second, first]) {
+      await store.append(event);
+    }
+
+    const withinWindow = new RoomHub(store, { maxMessagesPerRoom: 2, maxEventsPerRoom: 5 });
+    expect((await withinWindow.snapshot("dev")).messages.map((message) => message.content)).toEqual([
+      "first",
+      "second",
+    ]);
+
+    for (const event of [third, first]) {
+      await store.append(event);
+    }
+
+    const afterEviction = new RoomHub(store, { maxMessagesPerRoom: 2, maxEventsPerRoom: 5 });
+    expect((await afterEviction.snapshot("dev")).messages.map((message) => message.content)).toEqual([
+      "third",
+      "first",
+    ]);
+  });
+
   it("rejects invalid capacity configuration", () => {
     const store = new JsonlRoomStore(dir);
     expect(() => new RoomHub(store, { maxLoadedRooms: 0 })).toThrow(
@@ -232,6 +261,41 @@ describe("RoomHub capacity", () => {
     expect(() => new RoomHub(store, { maxMessagesPerRoom: Number.NaN })).toThrow(
       "maxMessagesPerRoom must be a positive integer",
     );
+  });
+});
+
+describe("RoomHub SSE delivery", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "agent-room-sse-test-"));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("isolates a failed subscriber after the event is persisted", async () => {
+    const store = new JsonlRoomStore(dir);
+    const hub = new RoomHub(store);
+    const failing = new FakeServerResponse();
+    const healthy = new FakeServerResponse();
+
+    await hub.stream("dev", failing.asServerResponse());
+    await hub.stream("dev", healthy.asServerResponse());
+    failing.failWrites = true;
+
+    try {
+      await expect(hub.sendMessage("dev", messageInput("delivered"))).resolves.toMatchObject({
+        content: "delivered",
+      });
+      expect(healthy.writes.some((chunk) => chunk.includes("event: message"))).toBe(true);
+      expect(failing.destroyed).toBe(true);
+      expect(await store.load("dev")).toHaveLength(1);
+    } finally {
+      failing.emit("close");
+      healthy.emit("close");
+    }
   });
 });
 
@@ -313,6 +377,33 @@ class ReplayTrackingStore extends JsonlRoomStore {
   override async load(room: string) {
     this.loadCalls += 1;
     return super.load(room);
+  }
+}
+
+class FakeServerResponse extends EventEmitter {
+  readonly writes: string[] = [];
+  failWrites = false;
+  destroyed = false;
+  writableEnded = false;
+
+  writeHead(): this {
+    return this;
+  }
+
+  write(chunk: string): boolean {
+    if (this.failWrites) throw new Error("simulated disconnected subscriber");
+    this.writes.push(chunk);
+    return true;
+  }
+
+  destroy(): this {
+    this.destroyed = true;
+    this.emit("close");
+    return this;
+  }
+
+  asServerResponse(): ServerResponse {
+    return this as unknown as ServerResponse;
   }
 }
 

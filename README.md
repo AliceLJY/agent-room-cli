@@ -46,7 +46,7 @@ The server bounds its long-lived in-memory state while leaving the append-only J
 - At most 100 rooms are loaded per server process. Once full, a request for a new room returns `503`; already loaded rooms keep working.
 - Each loaded room retains the newest 10,000 messages and 20,000 events in memory. `snapshot`, `/history`, `catch_up`, reconnect replay, and archives created by that process see only the retained window after a limit is crossed. Older records remain in the JSONL file for manual recovery; the HTTP/MCP APIs do not return records outside the retained window.
 - `GET /rooms/<room>/messages` defaults to 50 messages and accepts integer limits from 1 through 100. Invalid values such as `0` or `NaN` return `400`.
-- Ordinary `RoomClient` requests time out after 10 seconds. The long-lived SSE stream uses its caller-provided abort signal instead.
+- Ordinary `RoomClient` requests time out after 10 seconds. A mutation timeout only ends the client's wait; the server may still commit the change, so inspect current state before retrying. The long-lived SSE stream uses its caller-provided abort signal instead.
 
 All values must be positive integers. Override the defaults with `AGENT_ROOM_MAX_LOADED_ROOMS`, `AGENT_ROOM_MAX_MESSAGES_PER_ROOM`, `AGENT_ROOM_MAX_EVENTS_PER_ROOM`, and `AGENT_ROOM_REQUEST_TIMEOUT_MS` before starting `agent-room`.
 

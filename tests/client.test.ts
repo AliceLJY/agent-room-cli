@@ -27,6 +27,26 @@ describe("RoomClient request timeout", () => {
     await expect(client.snapshot()).rejects.toThrow("GET / timed out after 20ms");
   });
 
+  it("warns that a timed-out mutation may still complete on the server", async () => {
+    server = createServer(() => {
+      // The client stops waiting, but this does not prove the server cancelled
+      // work that may already have started.
+    });
+    await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("missing test server address");
+
+    const client = new RoomClient(`http://127.0.0.1:${address.port}`, "dev", {
+      requestTimeoutMs: 20,
+    });
+    await expect(client.send({
+      senderId: "p_human",
+      content: "hello",
+    })).rejects.toThrow(
+      "POST /messages timed out after 20ms; the server may still have applied the mutation",
+    );
+  });
+
   it("rejects non-positive and non-integer timeout configuration", () => {
     expect(() => new RoomClient("http://127.0.0.1:43110", "dev", {
       requestTimeoutMs: 0,
