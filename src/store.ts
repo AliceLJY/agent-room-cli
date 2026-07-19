@@ -1,5 +1,6 @@
-import { mkdir, readFile, appendFile } from "node:fs/promises";
+import { appendFile, mkdir, open } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { createInterface } from "node:readline";
 import type { RoomEvent } from "./types.js";
 
 export class JsonlRoomStore {
@@ -16,30 +17,46 @@ export class JsonlRoomStore {
   }
 
   async load(room: string): Promise<RoomEvent[]> {
+    const events: RoomEvent[] = [];
+    await this.replay(room, (event) => events.push(event));
+    return events;
+  }
+
+  async replay(room: string, onEvent: (event: RoomEvent) => void): Promise<void> {
     const file = this.eventFile(room);
-    let raw = "";
+    let fileHandle: Awaited<ReturnType<typeof open>>;
     try {
-      raw = await readFile(file, "utf8");
+      fileHandle = await open(file, "r");
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
       throw error;
     }
 
-    const events: RoomEvent[] = [];
-    for (const [index, line] of raw.split("\n").entries()) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
+    const input = fileHandle.createReadStream({ encoding: "utf8", autoClose: false });
+    const lines = createInterface({ input, crlfDelay: Infinity });
+    let index = 0;
+    try {
+      for await (const line of lines) {
+        index += 1;
+        const trimmed = line.trim();
+        if (!trimmed) continue;
 
-      try {
-        events.push(JSON.parse(trimmed) as RoomEvent);
-      } catch (error) {
-        console.warn(
-          `[agent-room] skipped invalid event JSON in ${file}:${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        let event: RoomEvent;
+        try {
+          event = JSON.parse(trimmed) as RoomEvent;
+        } catch (error) {
+          console.warn(
+            `[agent-room] skipped invalid event JSON in ${file}:${index}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+          continue;
+        }
+        onEvent(event);
       }
+    } finally {
+      lines.close();
+      input.destroy();
+      await fileHandle.close();
     }
-
-    return events;
   }
 }
 

@@ -37,6 +37,17 @@ cc> Updated recommendation...
 - API 不开放跨域浏览器读取，JSON 请求体上限为 64 KiB。这些只是收窄暴露面的措施，不能代替鉴权。
 - `~/.agent-room/` 下的 JSONL transcript 和 markdown 归档仍是敏感明文。pattern 脱敏只能尽力而为，不能保证剔除所有凭据或隐私内容。
 
+## 资源上限
+
+服务端会限制长期驻留的内存状态，append-only JSONL transcript 不会因此删除内容：
+
+- 每个服务进程最多加载 100 个房间。达到上限后，新房间请求返回 `503`，已加载房间继续可用。
+- 每个已加载房间在内存中保留最新 10,000 条消息和 20,000 个事件。超过上限后，`snapshot`、`/history`、`catch_up`、断线重放以及该进程生成的归档只能看到保留窗口；更早的记录仍留在 JSONL 文件中供人工恢复，HTTP/MCP API 不再返回窗口以外的记录。
+- `GET /rooms/<room>/messages` 默认返回 50 条，只接受 1 到 100 的整数；`0`、`NaN` 等非法值返回 `400`。
+- 普通 `RoomClient` 请求默认 10 秒超时；长期 SSE 流仍由调用方传入的 abort signal 控制。
+
+所有配置值都必须是正整数。启动 `agent-room` 前可用 `AGENT_ROOM_MAX_LOADED_ROOMS`、`AGENT_ROOM_MAX_MESSAGES_PER_ROOM`、`AGENT_ROOM_MAX_EVENTS_PER_ROOM` 和 `AGENT_ROOM_REQUEST_TIMEOUT_MS` 覆盖默认值。
+
 ## 安装
 
 从 GitHub 安装：

@@ -8,11 +8,29 @@ import type {
   SendMessageInput,
 } from "./types.js";
 
+export const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
+
+export interface RoomClientOptions {
+  requestTimeoutMs?: number;
+}
+
 export class RoomClient {
+  private readonly requestTimeoutMs: number;
+
   constructor(
     private readonly serverUrl: string,
     private readonly room: string,
-  ) {}
+    options: RoomClientOptions = {},
+  ) {
+    const configured = options.requestTimeoutMs
+      ?? (process.env.AGENT_ROOM_REQUEST_TIMEOUT_MS === undefined
+        ? DEFAULT_REQUEST_TIMEOUT_MS
+        : Number(process.env.AGENT_ROOM_REQUEST_TIMEOUT_MS));
+    if (!Number.isSafeInteger(configured) || configured <= 0) {
+      throw new Error("requestTimeoutMs must be a positive integer");
+    }
+    this.requestTimeoutMs = configured;
+  }
 
   async register(input: RegisterParticipantInput): Promise<Participant> {
     return this.request<Participant>("POST", `/participants`, input);
@@ -38,9 +56,9 @@ export class RoomClient {
     return this.request<RoomSnapshot>("GET", "");
   }
 
-  async events(since?: string): Promise<RoomEvent[]> {
+  async events(since?: string, signal?: AbortSignal): Promise<RoomEvent[]> {
     const query = since ? `?since=${encodeURIComponent(since)}` : "";
-    return this.request<RoomEvent[]>("GET", `/events${query}`);
+    return this.request<RoomEvent[]>("GET", `/events${query}`, undefined, signal);
   }
 
   async stream(onEvent: (event: RoomEvent) => void, signal?: AbortSignal): Promise<void> {
@@ -65,8 +83,12 @@ export class RoomClient {
     while (!signal?.aborted) {
       try {
         if (since) {
-          const missed = await this.events(since);
-          for (const event of missed) handleEvent(event);
+          const missed = await this.events(since, signal);
+          if (signal?.aborted) return;
+          for (const event of missed) {
+            if (signal?.aborted) return;
+            handleEvent(event);
+          }
         }
         await this.openStream(handleEvent, signal);
         attempts = 0;
@@ -106,18 +128,46 @@ export class RoomClient {
     }
   }
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const res = await fetch(`${this.baseUrl()}${path}`, {
-      method,
-      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const text = await res.text();
-    const json = text ? JSON.parse(text) : null;
-    if (!res.ok) {
-      throw new Error(json?.error || `${method} ${path} failed: ${res.status}`);
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    const controller = new AbortController();
+    let timedOut = false;
+    const abortFromCaller = () => controller.abort(signal?.reason);
+    if (signal?.aborted) abortFromCaller();
+    else signal?.addEventListener("abort", abortFromCaller, { once: true });
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, this.requestTimeoutMs);
+    try {
+      const res = await fetch(`${this.baseUrl()}${path}`, {
+        method,
+        headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: controller.signal,
+      });
+      const text = await res.text();
+      const json = text ? JSON.parse(text) : null;
+      if (!res.ok) {
+        throw new Error(json?.error || `${method} ${path || "/"} failed: ${res.status}`);
+      }
+      return json as T;
+    } catch (error) {
+      if (timedOut) {
+        throw new Error(
+          `${method} ${path || "/"} timed out after ${this.requestTimeoutMs}ms`,
+          { cause: error },
+        );
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abortFromCaller);
     }
-    return json as T;
   }
 
   private baseUrl(): string {
