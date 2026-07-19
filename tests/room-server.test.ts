@@ -38,23 +38,49 @@ describe("RoomHub.registerParticipant", () => {
   it("MCP re-registration confirms without resetting mode/client/joinedAt", async () => {
     const first = await hub.registerParticipant("dev", {
       id: "p_cc",
-      name: "cc",
+      name: "Claude",
       identifier: "cc",
       type: "agent",
       client: "claude",
       mode: "everyone",
     });
-    // The MCP server only knows id + name; the merge must keep the rest.
+    // Legacy/internal clients may re-register with only id + name; preserve the alias.
     const second = await hub.registerParticipant("dev", {
       id: "p_cc",
-      name: "cc",
+      name: "Claude",
       type: "agent",
       confirmed: true,
     });
     expect(second.confirmed).toBe(true);
     expect(second.mode).toBe("everyone");
     expect(second.client).toBe("claude");
+    expect(second.identifier).toBe("cc");
     expect(second.joinedAt).toBe(first.joinedAt);
+  });
+
+  it("shares one cold-start load across concurrent first registrations", async () => {
+    const store = new BlockingRoomStore(dir);
+    const coldHub = new RoomHub(store);
+
+    const first = coldHub.registerParticipant("cold", {
+      id: "p_cc",
+      name: "Claude",
+      identifier: "cc",
+      type: "agent",
+    });
+    const second = coldHub.registerParticipant("cold", {
+      id: "p_codex",
+      name: "Codex",
+      identifier: "codex",
+      type: "agent",
+    });
+
+    store.release();
+    await Promise.all([first, second]);
+
+    const snapshot = await coldHub.snapshot("cold");
+    expect(store.loadCalls).toBe(1);
+    expect(snapshot.participants.map((p) => p.id).sort()).toEqual(["p_cc", "p_codex"]);
   });
 
   it("confirmed survives a later unconfirmed re-registration", async () => {
@@ -74,6 +100,24 @@ describe("RoomHub.registerParticipant", () => {
     expect(again.client).toBe("codex");
   });
 });
+
+class BlockingRoomStore extends JsonlRoomStore {
+  loadCalls = 0;
+  private releaseGate!: () => void;
+  private readonly gate = new Promise<void>((resolve) => {
+    this.releaseGate = resolve;
+  });
+
+  override async load(room: string) {
+    this.loadCalls += 1;
+    await this.gate;
+    return super.load(room);
+  }
+
+  release(): void {
+    this.releaseGate();
+  }
+}
 
 describe("room HTTP server safety", () => {
   let dir: string;

@@ -40,21 +40,23 @@ export async function runAgent(options: AgentRuntimeOptions): Promise<void> {
 
   const tmpDir = mkdtempSync(join(tmpdir(), "agent-room-"));
   const session = `agent_room_${options.identifier}`;
-  if (tmuxSessionExists(session)) tmuxKillSession(session);
-  tmuxCreateSession(session);
-
-  const handle = await startAgentInTarget({
-    client: options.client,
-    name: options.name,
-    identifier: options.identifier,
-    serverUrl: options.serverUrl,
-    room: options.room,
-    mode: options.mode,
-    target: session,
-    extraArgs: options.extraArgs,
-  }, tmpDir);
+  let handle: AgentTargetHandle | null = null;
 
   try {
+    if (tmuxSessionExists(session)) tmuxKillSession(session);
+    tmuxCreateSession(session);
+
+    handle = await startAgentInTarget({
+      client: options.client,
+      name: options.name,
+      identifier: options.identifier,
+      serverUrl: options.serverUrl,
+      room: options.room,
+      mode: options.mode,
+      target: session,
+      extraArgs: options.extraArgs,
+    }, tmpDir);
+
     console.log(`Launching @${options.identifier} (${options.client}) into room ${options.room}.`);
     console.log("The room host prints '[room] @… connected' once the agent can actually hear it; /who shows connection state.");
     console.log(`tmux session: ${session}`);
@@ -67,8 +69,17 @@ export async function runAgent(options: AgentRuntimeOptions): Promise<void> {
       await waitForSignal();
     }
   } finally {
-    await handle.stop();
-    if (!options.keep) tmuxKillSession(session);
+    try {
+      if (handle) {
+        await handle.stop();
+      } else {
+        rmSync(tmpDir, { recursive: true, force: true });
+      }
+    } finally {
+      // --keep applies only after a successful launch. A failed startup must
+      // not leave an empty tmux session or its temporary MCP config behind.
+      if (!handle || !options.keep) tmuxKillSession(session);
+    }
   }
 }
 
@@ -98,6 +109,8 @@ export async function startAgentInTarget(
     participant.id,
     "--name",
     options.name,
+    "--identifier",
+    options.identifier,
   ];
 
   if (options.client === "claude") {

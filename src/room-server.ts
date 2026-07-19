@@ -52,15 +52,17 @@ export function assertSafeBindHost(host: string, unsafeNoAuth = false): void {
 
 export class RoomHub {
   private readonly rooms = new Map<string, RoomState>();
+  private readonly roomLoads = new Map<string, Promise<RoomState>>();
 
   constructor(private readonly store: JsonlRoomStore) {}
 
   async registerParticipant(room: string, input: RegisterParticipantInput): Promise<Participant> {
     const state = await this.getRoom(room);
-    const identifier = slugifyName(input.identifier || input.name);
-    const id = input.id || stableId(`${room}:${identifier}`, "p");
+    const requestedIdentifier = slugifyName(input.identifier || input.name);
+    const id = input.id || stableId(`${room}:${requestedIdentifier}`, "p");
     const now = new Date().toISOString();
     const existing = state.participants.get(id);
+    const identifier = slugifyName(input.identifier || existing?.identifier || input.name);
     // Re-registration (e.g. the agent's MCP server confirming readiness) must
     // merge with the existing record, not reset mode/client back to defaults.
     const participant: Participant = {
@@ -201,6 +203,19 @@ export class RoomHub {
     const existing = this.rooms.get(room);
     if (existing) return existing;
 
+    let loading = this.roomLoads.get(room);
+    if (!loading) {
+      loading = this.loadRoom(room);
+      this.roomLoads.set(room, loading);
+    }
+    try {
+      return await loading;
+    } finally {
+      if (this.roomLoads.get(room) === loading) this.roomLoads.delete(room);
+    }
+  }
+
+  private async loadRoom(room: string): Promise<RoomState> {
     const events = await this.store.load(room);
     const state: RoomState = {
       participants: new Map(),
@@ -208,10 +223,7 @@ export class RoomHub {
       events: [],
       streams: new Set(),
     };
-
-    for (const event of events) {
-      applyEvent(state, event);
-    }
+    for (const event of events) applyEvent(state, event);
     state.events = events;
     this.rooms.set(room, state);
     return state;

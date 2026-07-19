@@ -10,6 +10,7 @@ interface Args {
   room: string;
   id: string;
   name: string;
+  identifier: string;
 }
 
 const packageVersion: string = JSON.parse(
@@ -82,7 +83,13 @@ await server.connect(transport);
 // successful MCP connect is the first honest "this agent can hear the room"
 // signal. The launcher's earlier registration only means "launch attempted".
 try {
-  await client.register({ id: args.id, name: args.name, type: "agent", confirmed: true });
+  await client.register({
+    id: args.id,
+    name: args.name,
+    identifier: args.identifier,
+    type: "agent",
+    confirmed: true,
+  });
 } catch {
   // Room server may be unreachable; tool calls will surface the error.
 }
@@ -96,9 +103,10 @@ function parseArgs(argv: string[]): Args {
     if (key === "--room") result.room = value;
     if (key === "--id") result.id = value;
     if (key === "--name") result.name = value;
+    if (key === "--identifier") result.identifier = value;
     if (key.startsWith("--")) i += 1;
   }
-  for (const key of ["server", "room", "id", "name"] as const) {
+  for (const key of ["server", "room", "id", "name", "identifier"] as const) {
     if (!result[key]) throw new Error(`missing --${key}`);
   }
   return result as Args;
