@@ -185,10 +185,16 @@ function isAbortError(error: unknown): boolean {
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   if (ms <= 0) return Promise.resolve();
   return new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener("abort", () => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
+      signal?.removeEventListener("abort", abortSleep);
       resolve();
-    }, { once: true });
+    };
+    const abortSleep = () => finish();
+    const timer = setTimeout(finish, ms);
+    signal?.addEventListener("abort", abortSleep, { once: true });
   });
 }

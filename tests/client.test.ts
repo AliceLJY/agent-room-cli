@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:http";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { RoomClient } from "../src/client.js";
 import type { RoomEvent } from "../src/types.js";
 
@@ -92,6 +92,28 @@ describe("RoomClient request timeout", () => {
     expect(Date.now() - abortedAt).toBeLessThan(500);
     expect(received.map((receivedEvent) => receivedEvent.id)).toEqual(["evt_first"]);
   });
+
+  it("removes a reconnect sleep abort listener after the timer completes", async () => {
+    const fetchRequest = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, { status: 503, statusText: "Unavailable" }),
+    );
+    const client = new RoomClient("http://127.0.0.1:43110", "dev");
+    const controller = new AbortController();
+    const addListener = vi.spyOn(controller.signal, "addEventListener");
+    const removeListener = vi.spyOn(controller.signal, "removeEventListener");
+    const stream = client.stream(() => undefined, controller.signal);
+
+    try {
+      const sleepListener = await waitForValue(() => addListener.mock.calls
+        .find((call) => call[0] === "abort")?.[1]);
+      await waitForValue(() => fetchRequest.mock.calls.length >= 2 || undefined);
+      expect(removeListener).toHaveBeenCalledWith("abort", sleepListener);
+    } finally {
+      controller.abort();
+      await stream;
+      fetchRequest.mockRestore();
+    }
+  });
 });
 
 function messageEvent(id: string, content: string): RoomEvent {
@@ -126,4 +148,14 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: s
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+async function waitForValue<T>(read: () => T | undefined, timeoutMs = 1_500): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const value = read();
+    if (value !== undefined) return value;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("timed out waiting for value");
 }
