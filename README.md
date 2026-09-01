@@ -2,7 +2,7 @@
 
 Local CLI room for a human, Claude Code, and Codex.
 
-Chinese documentation: [README.zh-CN.md](README.zh-CN.md).
+Chinese documentation: [README_CN.md](README_CN.md).
 
 The design goal is simple: keep the original AI CLIs, put them in one shared terminal room, and make agents answer only when they are mentioned.
 
@@ -204,9 +204,9 @@ Release steps live in [docs/release-checklist.md](docs/release-checklist.md).
 
 ## Relation to trio
 
-The upstream protocol this room implements is `~/.claude/skills/trio/SKILL.md` (mirrored to `~/.codex/skills/trio/SKILL.md` via symlink). `trio` defines the three-person collaboration model — the roles, the default flow, the trigger phrases (`预读 brief`, `反向产品经理`, `借鉴审计`, `盲点扫描`, `三角制衡`). `agent-room-cli` is the runtime that makes those phrases executable inside a shared terminal room instead of living only as a mental model.
+This room was built as the runtime for `trio`, a private three-person collaboration protocol (one human + Claude Code + Codex): the roles, the default flow, and the trigger phrases (`预读 brief`, `反向产品经理`, `借鉴审计`, `盲点扫描`, `三角制衡`). `agent-room-cli` made those phrases executable inside a shared terminal room instead of living only as a mental model.
 
-If you are reading this repo to borrow ideas: read the trio skill first for the protocol, then this repo for how a thin relay turns that protocol into something you can type.
+The protocol has since evolved into an owner-led mutual-review model, now engineered as [mutual-review-room](https://github.com/AliceLJY/mutual-review-room) — an owner pane plus read-only reviewer panes, each provider keeping its native persistent session. This repo remains the mention-routed free-form room; read it for how a thin relay turns a collaboration protocol into something you can type.
 
 ## Borrowed Ideas
 

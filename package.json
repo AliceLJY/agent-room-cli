@@ -30,7 +30,7 @@
     "docs/design-principles.md",
     "docs/release-checklist.md",
     "README.md",
-    "README.zh-CN.md",
+    "README_CN.md",
     "LICENSE"
   ],
   "scripts": {

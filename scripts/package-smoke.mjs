@@ -21,7 +21,7 @@ for (const [binName, binPath] of Object.entries(packageJson.bin)) {
   }
 }
 
-for (const required of ["README.md", "README.zh-CN.md", "LICENSE", "package.json"]) {
+for (const required of ["README.md", "README_CN.md", "LICENSE", "package.json"]) {
   if (!packedFiles.has(required)) {
     throw new Error(`packed artifact is missing required file: ${required}`);
   }

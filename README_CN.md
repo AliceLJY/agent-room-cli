@@ -202,9 +202,9 @@ agent 会自己 Read 那份 markdown。relay 不会主动把旧上下文塞进�
 
 ## 与 trio 的关系
 
-这个房间实现的是 `~/.claude/skills/trio/SKILL.md` 这份协议（通过 symlink 同步到 `~/.codex/skills/trio/SKILL.md` 给 Codex 侧看）。`trio` 定义了 Alice × Claude × Codex 三人协作的角色分工、默认流程、触发短语（`预读 brief` / `反向产品经理` / `借鉴审计` / `盲点扫描` / `三角制衡`）。`agent-room-cli` 是让这些短语真的能在共享终端里被"说出来并触发"的 runtime，不再只是一份心智模型。
+这个房间最初是 `trio` 的 runtime——一份私有的三人协作协议（一个人类 + Claude Code + Codex），定义角色分工、默认流程、触发短语（`预读 brief` / `反向产品经理` / `借鉴审计` / `盲点扫描` / `三角制衡`）。`agent-room-cli` 让这些短语真的能在共享终端里被"说出来并触发"，不再只是一份心智模型。
 
-想借鉴这个 repo 的人：先读 trio skill 拿协议，再回来看这个 repo 是怎么用薄 relay 把协议变成可以敲的命令。
+这套协议后来演化成 owner 带队的互审模型，工程化落地是 [mutual-review-room](https://github.com/AliceLJY/mutual-review-room)——owner 窗格 + 只读 reviewer 窗格，各 provider 保持原生持久会话。本仓仍是那个 @ 点名路由的自由讨论房间；想借鉴的话，看这里怎么用一层薄 relay 把协作协议变成敲得出来的命令。
 
 ## 借鉴来源
 
