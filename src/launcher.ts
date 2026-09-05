@@ -129,7 +129,19 @@ export async function startAgentInTarget(
     ].join(" "));
   }
 
-  const bridge = new AgentTmuxBridge(options.target, options.client);
+  const bridge = new AgentTmuxBridge(options.target, options.client, (droppedCount) => {
+    const plural = droppedCount === 1 ? "message" : "messages";
+    client.send({
+      senderId: "system",
+      senderName: "agent-room",
+      senderType: "agent",
+      content: `@${options.identifier} (${options.name}) is no longer running an agent in its pane — dropped ${droppedCount} pending ${plural} instead of typing them into a shell. Relaunch it before mentioning it again.`,
+    }).catch((error) => {
+      console.warn(
+        `[agent-room] failed to notify room that @${options.identifier} is gone: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
+  });
   const abort = new AbortController();
   const buffer: BufferState = { messages: [], dropped: 0 };
   const streamTask = client.stream((event) => {

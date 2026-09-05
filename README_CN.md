@@ -33,7 +33,7 @@ cc> Updated recommendation...
 ## 安全边界
 
 - 房间默认只绑定 `127.0.0.1`，并且**没有应用层鉴权**。`host` 和 `trio` 遇到非 loopback 的 `--host` 会拒绝启动，除非同时显式传入 `--unsafe-no-auth`。
-- `--unsafe-no-auth` 只是明确接受风险的逃生口，不是安全的远程模式：任何能连到该端口的设备都能读取 transcript、订阅 SSE、注册参与者和发送消息。远程使用应优先走保留 loopback 监听的鉴权隧道。
+- `--unsafe-no-auth` 只是明确接受风险的逃生口，不是安全的远程模式：任何能连到该端口的设备都能读取 transcript、订阅 SSE、注册参与者和发送消息。远程使用应优先走保留 loopback 监听的鉴权隧道。如果某个 agent 的 CLI 已经退出、pane 落回了 shell，开着 `--unsafe-no-auth` 时一条 `@它` 的消息本可能被当成 shell 输入敲进去；现在 bridge 在每次注入前都会先查 pane 的前台进程，命中就丢弃这条消息（并向 room 回一条系统提示），不会再敲进那个 shell。
 - API 不开放跨域浏览器读取，JSON 请求体上限为 64 KiB。这些只是收窄暴露面的措施，不能代替鉴权。
 - `~/.agent-room/` 下的 JSONL transcript 和 markdown 归档仍是敏感明文。pattern 脱敏只能尽力而为，不能保证剔除所有凭据或隐私内容。
 

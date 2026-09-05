@@ -35,7 +35,7 @@ This is closer to an OpenClaw-style local agent room than a Telegram bridge.
 ## Security Boundary
 
 - The room binds to `127.0.0.1` by default and has **no application-level authentication**. `host` and `trio` refuse a non-loopback `--host` unless you also pass `--unsafe-no-auth`.
-- `--unsafe-no-auth` is an explicit escape hatch, not a secure remote mode: every peer that can reach the port can read the transcript, follow the SSE stream, register participants, and send messages. Prefer an authenticated tunnel that keeps the room listener on loopback.
+- `--unsafe-no-auth` is an explicit escape hatch, not a secure remote mode: every peer that can reach the port can read the transcript, follow the SSE stream, register participants, and send messages. Prefer an authenticated tunnel that keeps the room listener on loopback. If an agent's CLI has exited and its pane fell back to a shell, an `@mention` sent while `--unsafe-no-auth` is in effect could otherwise land as shell input; the bridge checks the pane's foreground process before every injection and drops the message (posting a system note back to the room) instead of typing it into that shell.
 - The API does not enable cross-origin browser reads, and JSON request bodies are capped at 64 KiB. These are containment measures, not authentication.
 - JSONL transcripts and markdown archives remain sensitive plaintext under `~/.agent-room/`. Pattern-based redaction is best effort and cannot guarantee that every credential or private detail is removed.
 

@@ -95,6 +95,41 @@ export function tmuxCapturePane(session: string): string[] {
   }
 }
 
+// The command currently running in the foreground of a pane, e.g. "claude",
+// "codex", "zsh", "node". Returns "" when it cannot be determined (pane/session
+// gone, tmux unavailable) — callers must not treat "" as "it's a shell".
+export function tmuxPaneCurrentCommand(target: string): string {
+  try {
+    const output = execFileSync(
+      "tmux",
+      ["display-message", "-p", "-t", safeSession(target), "#{pane_current_command}"],
+      { encoding: "utf8" },
+    );
+    return output.trim();
+  } catch {
+    return "";
+  }
+}
+
+// Shells a pane falls back to once the agent CLI running inside it exits.
+// tmux's pane_current_command already strips a login shell's leading "-",
+// but normalizeShellName() strips it too in case that ever changes upstream.
+const SHELL_FOREGROUND_COMMANDS = new Set(["sh", "bash", "zsh", "fish", "login"]);
+
+function normalizeShellName(command: string): string {
+  return command.startsWith("-") ? command.slice(1) : command;
+}
+
+// True once the agent CLI that used to run in this pane has exited and the
+// pane fell back to an interactive shell prompt. An empty (undeterminable)
+// result is treated as "not a shell" — a transient tmux hiccup should not be
+// read as "the agent is gone".
+export function isPaneBackAtShell(target: string): boolean {
+  const current = tmuxPaneCurrentCommand(target);
+  if (!current) return false;
+  return SHELL_FOREGROUND_COMMANDS.has(normalizeShellName(current));
+}
+
 export function tmuxAttach(session: string): Promise<void> {
   const name = safeSession(session);
   if (process.env.TMUX) {
@@ -123,6 +158,10 @@ export class AgentTmuxBridge {
   constructor(
     private readonly session: string,
     private readonly client: "claude" | "codex",
+    // Called when queued messages are dropped because the agent CLI is no
+    // longer running in this pane. Lets the caller tell the room why the
+    // mention went nowhere instead of injecting it into a bare shell.
+    private readonly onAgentGone?: (droppedCount: number) => void,
   ) {}
 
   deliver(prompt: string): void {
@@ -153,6 +192,17 @@ export class AgentTmuxBridge {
       this.stopPolling();
       return;
     }
+    if (isPaneBackAtShell(this.session)) {
+      // The agent CLI exited and the pane fell back to an interactive shell.
+      // Retrying would eventually type the queued chat text as shell input
+      // (bracketed paste + Enter), so drop the backlog instead of polling
+      // forever and tell the room why, rather than injecting it silently.
+      const dropped = this.queue.length;
+      this.queue.length = 0;
+      this.stopPolling();
+      this.onAgentGone?.(dropped);
+      return;
+    }
     if (!this.isSafeToInject()) {
       this.startPolling();
       return;
@@ -173,6 +223,10 @@ export class AgentTmuxBridge {
   }
 
   private isSafeToInject(): boolean {
+    // The pane must still be running the agent CLI, not a bare shell left
+    // behind after it exited (see the drain() check above, which handles the
+    // drop + notify behavior for that case specifically).
+    if (isPaneBackAtShell(this.session)) return false;
     const tail = tmuxCapturePane(this.session).slice(-20).join("\n");
     if (!tail.trim()) return false;
     if (this.client === "claude") {
