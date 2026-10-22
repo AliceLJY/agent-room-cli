@@ -8,6 +8,8 @@
 
 设计目标很直接：保留原生 AI CLI，把它们放进同一个共享终端房间，并让 agent 只在被点名时回答。
 
+**给谁用：** 已经在终端里用 Claude Code（Codex 可有可无）、想要一个自由讨论房间的人——你打 `@cc` 或 `@codex`，只有被点名的 agent 回答。如果你要的是结构化互审——一个 owner 会话、几个冷读且彼此隔离的 reviewer、每一轮都有持久记录——请用 [mutual-review-room](https://github.com/AliceLJY/mutual-review-room)，本仓不做这件事。
+
 ```text
 you> @cc review the retry design
 cc> I see two risks...
@@ -95,6 +97,13 @@ you> @all settle on the final version
 
 在 `you>` 提示符里粘贴多行文本会聚合成一条消息（不再一行变一条）；注入到 agent 窗格的 prompt 走 bracketed paste，贴进去的代码和 diff 全程保留格式。
 
+**只有 Claude Code？** `trio` 会同时启动两个 CLI。改成自己开房间、只接入 Claude：
+
+```bash
+agent-room host --room dev --name me                                        # 终端 1：房间和你的输入框
+agent-room run claude --name cc --server http://127.0.0.1:43110 --room dev  # 终端 2
+```
+
 Codex 会复用你正常的 `~/.codex` 登录态。`agent-room` 只会通过临时 CLI 参数传入房间 MCP 配置，所以重开房间不应该要求重新登录 Codex。
 
 如果只想创建 tmux 房间、稍后自己 attach：
@@ -116,7 +125,7 @@ tmux attach -t agent_room_dev_trio
 | `everyone` | 每条非自己消息都会触发 |
 | `silent` | 从不触发，只缓冲上下文 |
 
-你想要的三人房默认就用 `mentioned`：
+一个人加 Claude Code 和 Codex 的房间，默认的 `mentioned` 就合适：
 
 ```bash
 agent-room trio --room dev --name me --fresh
@@ -204,7 +213,7 @@ agent 会自己 Read 那份 markdown。relay 不会主动把旧上下文塞进�
 
 ## 与 trio 的关系
 
-这个房间最初是 `trio` 的 runtime——一份私有的三人协作协议（一个人类 + Claude Code + Codex），定义角色分工、默认流程、触发短语（`预读 brief` / `反向产品经理` / `借鉴审计` / `盲点扫描` / `三角制衡`）。`agent-room-cli` 让这些短语真的能在共享终端里被"说出来并触发"，不再只是一份心智模型。
+这个房间最初是 `trio` 的 runtime——作者个人的三方协作协议（一个人类 + Claude Code + Codex），定义角色分工、默认流程、触发短语（`预读 brief` / `反向产品经理` / `借鉴审计` / `盲点扫描` / `三角制衡`）。`agent-room-cli` 让这些短语真的能在共享终端里被"说出来并触发"，不再只是一份心智模型。
 
 这套协议后来演化成 owner 带队的互审模型，工程化落地是 [mutual-review-room](https://github.com/AliceLJY/mutual-review-room)——owner 窗格 + 只读 reviewer 窗格，各 provider 保持原生持久会话。本仓仍是那个 @ 点名路由的自由讨论房间；想借鉴的话，看这里怎么用一层薄 relay 把协作协议变成敲得出来的命令。
 

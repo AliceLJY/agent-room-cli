@@ -8,6 +8,8 @@ Chinese documentation: [README_CN.md](README_CN.md).
 
 The design goal is simple: keep the original AI CLIs, put them in one shared terminal room, and make agents answer only when they are mentioned.
 
+**Who it's for:** people who already use Claude Code (and optionally Codex) in a terminal and want a free-form room where a human types `@cc` or `@codex` and only the mentioned agent answers. If you want structured review instead — one owner session, several cold and isolated reviewers, a durable record of each round — use [mutual-review-room](https://github.com/AliceLJY/mutual-review-room); this repo does not do that.
+
 ```text
 you> @cc review the retry design
 cc> I see two risks...
@@ -97,6 +99,13 @@ Pane creation is not readiness. The left pane prints `[room] launching @cc (clau
 
 Multi-line pastes into the `you>` prompt are aggregated into one message instead of one message per line, and prompts injected into agent panes use bracketed paste — pasted code and diffs keep their formatting end to end.
 
+**Only have Claude Code?** `trio` launches both CLIs. Start the room yourself and attach only Claude:
+
+```bash
+agent-room host --room dev --name me                                        # terminal 1: the room and your prompt
+agent-room run claude --name cc --server http://127.0.0.1:43110 --room dev  # terminal 2
+```
+
 Codex uses your normal `~/.codex` login state. `agent-room` only passes the room MCP config as temporary CLI overrides, so restarting the room should not require a fresh Codex login.
 
 To create the tmux room without attaching immediately:
@@ -118,7 +127,7 @@ Default mode is `mentioned`.
 | `everyone` | Trigger on every non-self message |
 | `silent` | Never trigger; only buffer context |
 
-For the three-person room you described, use the default:
+For a room with one human plus Claude Code and Codex, the default fits:
 
 ```bash
 agent-room trio --room dev --name me --fresh
@@ -206,7 +215,7 @@ Release steps live in [docs/release-checklist.md](docs/release-checklist.md).
 
 ## Relation to trio
 
-This room was built as the runtime for `trio`, a private three-person collaboration protocol (one human + Claude Code + Codex): the roles, the default flow, and the trigger phrases (`预读 brief`, `反向产品经理`, `借鉴审计`, `盲点扫描`, `三角制衡`). `agent-room-cli` made those phrases executable inside a shared terminal room instead of living only as a mental model.
+This room was built as the runtime for `trio`, the author's personal three-party collaboration protocol (one human + Claude Code + Codex) with fixed roles, a default flow, and a handful of trigger phrases. `agent-room-cli` made those phrases executable inside a shared terminal room instead of living only as a mental model.
 
 The protocol has since evolved into an owner-led mutual-review model, now engineered as [mutual-review-room](https://github.com/AliceLJY/mutual-review-room) — an owner pane plus read-only reviewer panes, each provider keeping its native persistent session. This repo remains the mention-routed free-form room; read it for how a thin relay turns a collaboration protocol into something you can type.
 
