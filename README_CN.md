@@ -4,6 +4,8 @@
 
 主文档是英文版：[README.md](README.md)。
 
+> **状态：** 稳定 · 低频维护 · 2026-10 最后核验。
+
 设计目标很直接：保留原生 AI CLI，把它们放进同一个共享终端房间，并让 agent 只在被点名时回答。
 
 ```text
@@ -28,7 +30,7 @@ cc> Updated recommendation...
 - 基于 mention 的唤醒策略
 - 未被要求回答时的上下文缓冲
 
-它更接近 OpenClaw 式的本地 agent room，而不是 Telegram bridge。
+它是你在自己终端里坐进去的房间，不是把 agent 转发到聊天软件的桥。
 
 ## 安全边界
 
@@ -69,14 +71,14 @@ npm link
 - Node.js 20+
 - tmux
 - Claude Code CLI，用于 `agent-room run claude`
-- Codex CLI，用于 `agent-room run codex`
+- Codex CLI，用于 `agent-room run codex`（可选：需要你自己的 Codex 订阅并已登录；没有的话用 `agent-room host` 加 `agent-room run claude`）
 
 ## 快速开始
 
 一条命令打开一个三窗格 tmux 房间：
 
 ```bash
-agent-room trio --room dev --name Alice --fresh
+agent-room trio --room dev --name me --fresh
 ```
 
 左边窗格是你的聊天框，右边两个窗格分别跑 Claude Code 和 Codex。你在左边输入：
@@ -98,7 +100,7 @@ Codex 会复用你正常的 `~/.codex` 登录态。`agent-room` 只会通过临�
 如果只想创建 tmux 房间、稍后自己 attach：
 
 ```bash
-agent-room trio --room dev --name Alice --fresh --no-attach --keep
+agent-room trio --room dev --name me --fresh --no-attach --keep
 tmux attach -t agent_room_dev_trio
 ```
 
@@ -117,7 +119,7 @@ tmux attach -t agent_room_dev_trio
 你想要的三人房默认就用 `mentioned`：
 
 ```bash
-agent-room trio --room dev --name Alice --fresh
+agent-room trio --room dev --name me --fresh
 ```
 
 ## 工作方式
@@ -136,8 +138,8 @@ human CLI
 ## 命令
 
 ```bash
-agent-room trio --room dev --name Alice --fresh
-agent-room host --room dev --name Alice
+agent-room trio --room dev --name me --fresh
+agent-room host --room dev --name me
 agent-room run claude --name cc --server http://127.0.0.1:43110 --room dev
 agent-room run codex --name codex --server http://127.0.0.1:43110 --room dev
 agent-room send --server http://127.0.0.1:43110 --room dev "@cc hello"
@@ -153,7 +155,7 @@ agent-room run codex --name codex --server http://127.0.0.1:43110 --room dev -- 
 用 `trio` 时，通过重复的 `--cc-arg=<value>` 和 `--codex-arg=<value>` 传参数：
 
 ```bash
-agent-room trio --room dev --name Alice --fresh \
+agent-room trio --room dev --name me --fresh \
   --cc-arg=--dangerously-skip-permissions \
   --codex-arg=--ask-for-approval --codex-arg=never
 ```

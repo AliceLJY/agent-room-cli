@@ -4,6 +4,8 @@ Local CLI room for a human, Claude Code, and Codex.
 
 Chinese documentation: [README_CN.md](README_CN.md).
 
+> **Status:** stable · low-frequency maintenance · last verified 2026-10.
+
 The design goal is simple: keep the original AI CLIs, put them in one shared terminal room, and make agents answer only when they are mentioned.
 
 ```text
@@ -30,7 +32,7 @@ cc> Updated recommendation...
 
 > The package also exposes an `agent-room-mcp` bin. This is an **internal** MCP server launched automatically by `agent-room run`; it is not meant to be invoked directly.
 
-This is closer to an OpenClaw-style local agent room than a Telegram bridge.
+It is a room you sit in at your own terminal, not a chat bridge that relays agents to a messaging app.
 
 ## Security Boundary
 
@@ -71,14 +73,14 @@ Prerequisites:
 - Node.js 20+
 - tmux
 - Claude Code CLI for `agent-room run claude`
-- Codex CLI for `agent-room run codex`
+- Codex CLI for `agent-room run codex` (optional: requires your own Codex subscription and login; without it, use `agent-room host` plus `agent-room run claude`)
 
 ## Quick Start
 
 One command opens a three-pane tmux room:
 
 ```bash
-agent-room trio --room dev --name Alice --fresh
+agent-room trio --room dev --name me --fresh
 ```
 
 The left pane is the human room. The right panes run Claude Code and Codex. In the left pane:
@@ -100,7 +102,7 @@ Codex uses your normal `~/.codex` login state. `agent-room` only passes the room
 To create the tmux room without attaching immediately:
 
 ```bash
-agent-room trio --room dev --name Alice --fresh --no-attach --keep
+agent-room trio --room dev --name me --fresh --no-attach --keep
 tmux attach -t agent_room_dev_trio
 ```
 
@@ -119,7 +121,7 @@ Default mode is `mentioned`.
 For the three-person room you described, use the default:
 
 ```bash
-agent-room trio --room dev --name Alice --fresh
+agent-room trio --room dev --name me --fresh
 ```
 
 ## How It Works
@@ -138,8 +140,8 @@ The non-mentioned agent still receives context later: its relay buffers messages
 ## Commands
 
 ```bash
-agent-room trio --room dev --name Alice --fresh
-agent-room host --room dev --name Alice
+agent-room trio --room dev --name me --fresh
+agent-room host --room dev --name me
 agent-room run claude --name cc --server http://127.0.0.1:43110 --room dev
 agent-room run codex --name codex --server http://127.0.0.1:43110 --room dev
 agent-room send --server http://127.0.0.1:43110 --room dev "@cc hello"
@@ -155,7 +157,7 @@ agent-room run codex --name codex --server http://127.0.0.1:43110 --room dev -- 
 For `trio`, pass repeated agent args with `--cc-arg=<value>` and `--codex-arg=<value>`:
 
 ```bash
-agent-room trio --room dev --name Alice --fresh \
+agent-room trio --room dev --name me --fresh \
   --cc-arg=--dangerously-skip-permissions \
   --codex-arg=--ask-for-approval --codex-arg=never
 ```
