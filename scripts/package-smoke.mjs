@@ -4,11 +4,13 @@ import { fileURLToPath } from "node:url";
 
 const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-const report = JSON.parse(execFileSync(
+const rawReport = JSON.parse(execFileSync(
   npm,
   ["pack", "--json", "--dry-run", "--ignore-scripts"],
   { cwd: new URL("..", import.meta.url), encoding: "utf8" },
 ));
+// npm <= 11 prints an array of package reports; npm 12 prints an object keyed by package name.
+const report = Array.isArray(rawReport) ? rawReport : Object.values(rawReport ?? {});
 
 if (!Array.isArray(report) || report.length !== 1) {
   throw new Error("npm pack did not return exactly one package report");
