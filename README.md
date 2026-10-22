@@ -21,6 +21,8 @@ you> @cc fold codex's point into the final recommendation
 cc> Updated recommendation...
 ```
 
+![A real room: one human and one Claude Code agent; only the mentioned agent answers.](docs/assets/room-demo.png)
+
 ## What This Is
 
 `agent-room` starts a local HTTP/SSE room server. Human messages, Claude Code, and Codex messages share one transcript.

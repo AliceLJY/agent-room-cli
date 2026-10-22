@@ -21,6 +21,8 @@ you> @cc fold codex's point into the final recommendation
 cc> Updated recommendation...
 ```
 
+![真实运行的房间：一个人加一个 Claude Code agent，只有被点名的 agent 回答。](docs/assets/room-demo.png)
+
 ## 这是什么
 
 `agent-room` 会启动一个本地 HTTP/SSE 房间服务器。你的消息、Claude Code 的消息、Codex 的消息会进入同一份 transcript。
