@@ -56,15 +56,11 @@ cc> Updated recommendation...
 
 ## 安装
 
-从 GitHub 安装：
+从本地 checkout 克隆并编译安装（`npm install -g github:...` 在全局准备 git 依赖时不会安装 `tsc` 等 devDependencies，会导致编译失败）：
 
 ```bash
-npm install -g github:AliceLJY/agent-room-cli
-```
-
-从本地 checkout 安装：
-
-```bash
+git clone https://github.com/AliceLJY/agent-room-cli.git
+cd agent-room-cli
 npm install
 npm run build
 npm link

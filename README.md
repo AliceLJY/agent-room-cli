@@ -58,15 +58,11 @@ All values must be positive integers. Override the defaults with `AGENT_ROOM_MAX
 
 ## Install
 
-From GitHub:
+From a local checkout (clone and build — `npm install -g github:...` does not install devDependencies like `tsc` during global git-dep preparation):
 
 ```bash
-npm install -g github:AliceLJY/agent-room-cli
-```
-
-From a local checkout:
-
-```bash
+git clone https://github.com/AliceLJY/agent-room-cli.git
+cd agent-room-cli
 npm install
 npm run build
 npm link
