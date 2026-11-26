@@ -75,7 +75,7 @@ npm link
 
 ## 快速开始
 
-一条命令打开一个三窗格 tmux 房间：
+一条命令打开一个三窗格 tmux 房间。`trio` 要求 `claude` 和 `codex` **两个**都在 `PATH` 里；缺 `codex` 会直接报 `Error: codex CLI is required but was not found in PATH` 退出。没有 Codex 的话，直接看下面的「**只有 Claude Code？**」。
 
 ```bash
 agent-room trio --room dev --name me --fresh

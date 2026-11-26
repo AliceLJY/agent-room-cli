@@ -77,7 +77,7 @@ Prerequisites:
 
 ## Quick Start
 
-One command opens a three-pane tmux room:
+One command opens a three-pane tmux room. `trio` needs **both** `claude` and `codex` on your `PATH`; if `codex` is missing it stops with `Error: codex CLI is required but was not found in PATH`. No Codex? Skip to **Only have Claude Code?** below.
 
 ```bash
 agent-room trio --room dev --name me --fresh
